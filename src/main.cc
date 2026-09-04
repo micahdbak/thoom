@@ -19,13 +19,14 @@
 #endif
 
 SDL_Window* window;
-SDL_Renderer* renderer;
+SDL_Renderer* thoom::renderer;
 
-bool _running, capture_controls = false;
-Controller local_controller, remote_controller, captured_controller;
-Game* game;
+bool thoom::_running, thoom::capture_controls = false;
+thoom::Controller thoom::local_controller, thoom::remote_controller,
+    thoom::captured_controller;
+thoom::Game* thoom::game;
 
-int _object_id_counter = 0;
+int thoom::_object_id_counter = 0;
 
 void cleanup();
 void scale_screen_rect(SDL_FRect* screen_rect, const int window_width,
@@ -43,9 +44,11 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  int window_width = SCREEN_WIDTH * 2, window_height = SCREEN_HEIGHT * 2;
+  int window_width = THOOM_SCREEN_WIDTH * 2,
+      window_height = THOOM_SCREEN_HEIGHT * 2;
   if (!SDL_CreateWindowAndRenderer(argv[0], window_width, window_height,
-                                   SDL_WINDOW_RESIZABLE, &window, &renderer)) {
+                                   SDL_WINDOW_RESIZABLE, &window,
+                                   &thoom::renderer)) {
     std::cerr << "SDL_CreateWindowAndRenderer error: " << SDL_GetError()
               << std::endl;
     return 1;
@@ -53,7 +56,7 @@ int main(int argc, char** argv) {
 
   // std::cout << "Renderer: " << SDL_GetRendererName(renderer) << std::endl;
 
-  SDL_SetRenderVSync(renderer, 1);
+  SDL_SetRenderVSync(thoom::renderer, 1);
 
   if (std::atexit(cleanup) != 0) {
     std::cerr << "main error: couldn't register exit function" << std::endl;
@@ -64,18 +67,19 @@ int main(int argc, char** argv) {
   SDL_FRect screen_rect;
   scale_screen_rect(&screen_rect, window_width, window_height);
 
-  _running = true;
-  game = new Game();
-  game->argc = argc;
-  game->argv = argv;
-  game->init();
-  SDL_SetWindowTitle(window, game->title.c_str());
+  thoom::_running = true;
+  thoom::game = new thoom::Game();
+  thoom::game->argc = argc;
+  thoom::game->argv = argv;
+  thoom::game->init();
+  SDL_SetWindowTitle(window, thoom::game->title.c_str());
 
-  while (_running) {
+  while (thoom::_running) {
     SDL_Event event;
 
-    Controller* controller =
-        capture_controls ? &captured_controller : &local_controller;
+    thoom::Controller* controller = thoom::capture_controls
+                                        ? &thoom::captured_controller
+                                        : &thoom::local_controller;
 
     while (SDL_PollEvent(&event)) {
       switch (event.type) {
@@ -96,7 +100,7 @@ int main(int argc, char** argv) {
           break;
 
         case SDL_EVENT_QUIT:
-          _running = false;
+          thoom::_running = false;
           break;
 
         default:
@@ -105,34 +109,35 @@ int main(int argc, char** argv) {
       }
     }
 
-    game->step();
+    thoom::game->step();
 
     controller->clear_hits();
 
-    SDL_SetRenderDrawColor(renderer, game->bg_r, game->bg_g, game->bg_b, 255);
-    SDL_RenderClear(renderer);
-    SDL_RenderTexture(renderer, game->screen, NULL, &screen_rect);
-    SDL_RenderPresent(renderer);
+    SDL_SetRenderDrawColor(thoom::renderer, thoom::game->bg_r,
+                           thoom::game->bg_g, thoom::game->bg_b, 255);
+    SDL_RenderClear(thoom::renderer);
+    SDL_RenderTexture(thoom::renderer, thoom::game->screen, NULL, &screen_rect);
+    SDL_RenderPresent(thoom::renderer);
   }
 
   exit(0);
 }
 
 void cleanup() {
-  delete game;
-  game = nullptr;
-  SDL_SetRenderTarget(renderer, NULL);
+  delete thoom::game;
+  thoom::game = nullptr;
+  SDL_SetRenderTarget(thoom::renderer, NULL);
   SDL_DestroyWindow(window);
-  SDL_DestroyRenderer(renderer);
+  SDL_DestroyRenderer(thoom::renderer);
   SDL_Quit();
 }
 
 void scale_screen_rect(SDL_FRect* screen_rect, const int window_width,
                        const int window_height) {
   static const float screen_aspect_ratio_wtoh =
-      float(SCREEN_WIDTH) / float(SCREEN_HEIGHT);
+      float(THOOM_SCREEN_WIDTH) / float(THOOM_SCREEN_HEIGHT);
   static const float screen_aspect_ratio_htow =
-      float(SCREEN_HEIGHT) / float(SCREEN_WIDTH);
+      float(THOOM_SCREEN_HEIGHT) / float(THOOM_SCREEN_WIDTH);
 
   float window_aspect_ratio = float(window_width) / float(window_height);
 

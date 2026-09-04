@@ -14,6 +14,8 @@
 
 #define MSG_IS_NTS -1
 
+namespace thoom {
+
 NetworkAgent* net_agent = nullptr;
 
 NetworkAgent::NetworkAgent(bool offerer) {
@@ -233,3 +235,5 @@ void NetworkAgent::message_loop() {
   net_agent->connection.kill();
   net_agent->signaller.disconnect();
 }
+
+};  // namespace thoom

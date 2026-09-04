@@ -1,8 +1,9 @@
-#ifndef NET_CONNECTION
-#define NET_CONNECTION
+#pragma once
 
 #include <queue>
 #include <string>
+
+namespace thoom {
 
 class NetworkConnection {
  public:
@@ -42,4 +43,4 @@ class NetworkConnection {
   std::queue<std::string> messages;
 };
 
-#endif
+};  // namespace thoom

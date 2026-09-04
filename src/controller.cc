@@ -5,6 +5,8 @@
 #include "SDL3/SDL_keycode.h"
 #include "game.h"
 
+namespace thoom {
+
 std::map<SDL_Keycode, Button> ktobutton_map = {
     {SDLK_ESCAPE, Button::MENU},      {SDLK_UP, Button::UP},
     {SDLK_RIGHT, Button::RIGHT},      {SDLK_DOWN, Button::DOWN},
@@ -146,3 +148,5 @@ int Controller::cheat_last(int a, int b, int c) {
 
   return -1;
 }
+
+};  // namespace thoom

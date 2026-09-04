@@ -1,9 +1,10 @@
-#ifndef BMP_TEXTURE_H
-#define BMP_TEXTURE_H
+#pragma once
 
 #include <SDL3/SDL.h>
 
 #include <string>
+
+namespace thoom {
 
 #define FUNC_CHEESE "cheese"
 #define FUNC_CREDITS "credits"
@@ -18,4 +19,4 @@ void free_textures();
 std::string credits_args(int ants, int drones, int tanks, int agents,
                          int queen_time);
 
-#endif
+};  // namespace thoom

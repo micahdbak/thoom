@@ -4,6 +4,8 @@
 
 #include "game.h"
 
+namespace thoom {
+
 Tilesheet::Tilesheet(const char* tilesheet_path, int tile_width,
                      int tile_height) {
   SDL_Surface* tilesheet_surface = SDL_LoadBMP(tilesheet_path);
@@ -359,3 +361,5 @@ void Map::render_tile(int x, int y) {
     }
   }
 }
+
+};  // namespace thoom

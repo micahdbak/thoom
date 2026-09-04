@@ -10,6 +10,8 @@
 
 #include "game.h"
 
+namespace thoom {
+
 SaveData save;
 
 #define PREF_ORG "CheddarAndFeta"
@@ -184,3 +186,5 @@ float str_to_float(std::string str) {
   memcpy(&f, &bits, 4);
   return f;
 }
+
+};  // namespace thoom

@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include "game.h"
+#include "utils.h"
 
 #define NUM_VOICES 32
 
@@ -14,6 +15,8 @@
 // audio > LISTEN_NEAR & < LISTEN_FAR are quieter, audio > LISTEN_FAR are silent
 #define LISTEN_NEAR 160.0f
 #define LISTEN_FAR 320.0f
+
+namespace thoom {
 
 struct audio_source {
   SDL_AudioSpec spec;
@@ -135,7 +138,7 @@ void play_audio(const std::string& wav_path, float gain, float x, float y,
     game->audio.push_back(Game::AudioMsg{wav_path, gain, x, y});
   }
 
-  float dist = distance_between_points(listener_x, listener_y, x, y);
+  float dist = THOOM_DISTANCE_BETWEEN_POINTS(listener_x, listener_y, x, y);
 
   // too far
   if (dist > LISTEN_FAR) {
@@ -220,3 +223,5 @@ void ambience_step() {
     std::exit(1);
   }
 }
+
+};  // namespace thoom

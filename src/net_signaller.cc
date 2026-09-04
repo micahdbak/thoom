@@ -10,6 +10,8 @@
 
 #define NTS -1
 
+namespace thoom {
+
 void NetworkSignaller::connect(const std::string& code, bool offerer) {
   if (this->state != NetworkSignaller::State::NOT_CONNECTED) {
     std::cerr << "NetworkSignaller::connect fatal error: already connecting or "
@@ -104,3 +106,5 @@ void NetworkSignaller::on_message(int, const char* message, int size,
   NetworkSignaller* signaller = (NetworkSignaller*)user_ptr;
   signaller->messages.push(message);
 }
+
+};  // namespace thoom

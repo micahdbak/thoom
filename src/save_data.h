@@ -1,9 +1,10 @@
-#ifndef SAVE_DATA_H
-#define SAVE_DATA_H
+#pragma once
 
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+namespace thoom {
 
 #define LOAD_SUCCESS 0
 #define LOAD_NEW 1
@@ -75,4 +76,4 @@ class SaveData {
 
 extern SaveData save;
 
-#endif
+};  // namespace thoom

@@ -1,11 +1,12 @@
-#ifndef CONTROLLER_H
-#define CONTROLLER_H
+#pragma once
 
 #include <SDL3/SDL.h>
 
 #include <map>
 #include <string>
 #include <vector>
+
+namespace thoom {
 
 #define NO_CHAR -1
 
@@ -69,4 +70,4 @@ class Controller {
 extern Controller local_controller, remote_controller, captured_controller;
 extern bool capture_controls;
 
-#endif
+};  // namespace thoom

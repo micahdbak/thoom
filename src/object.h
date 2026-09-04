@@ -1,10 +1,11 @@
-#ifndef OBJECT_H
-#define OBJECT_H
+#pragma once
 
 #include <SDL3/SDL.h>
 
 #include <memory>
 #include <string>
+
+namespace thoom {
 
 extern int _object_id_counter;  // main.cpp
 
@@ -38,4 +39,4 @@ class ObjectFactory {
   virtual Object* create(const std::string& options) = 0;
 };
 
-#endif
+};  // namespace thoom

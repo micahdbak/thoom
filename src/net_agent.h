@@ -1,5 +1,4 @@
-#ifndef NET_AGENT_H
-#define NET_AGENT_H
+#pragma once
 
 #include <mutex>
 #include <queue>
@@ -8,6 +7,8 @@
 
 #include "net_connection.h"
 #include "net_signaller.h"
+
+namespace thoom {
 
 // shared message codes between cheddar and feta
 
@@ -155,4 +156,4 @@ class NetworkAgent {
 
 extern NetworkAgent* net_agent;
 
-#endif
+};  // namespace thoom

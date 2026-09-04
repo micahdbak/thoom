@@ -1,5 +1,4 @@
-#ifndef GAME_DATA_H
-#define GAME_DATA_H
+#pragma once
 
 #include <SDL3/SDL.h>
 
@@ -17,29 +16,11 @@
 #include "net_agent.h"
 #include "object.h"
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-// useful math stuff
-
-#define cnf_clamp(_x, _min, _max) \
-  ((_x) < (_min) ? (_min) : ((_x) > (_max) ? (_max) : (_x)))
-#define cnf_min(_a, _b) ((_b) < (_a) ? (_b) : (_a))
-#define cnf_max(_a, _b) ((_b) > (_a) ? (_b) : (_a))
-#define cnf_sign(_x) ((_x) == 0 ? 0 : ((_x) > 0 ? 1 : -1))
-#define cnf_abs(_x) ((_x) < 0 ? (-1 * (_x)) : (_x))
-
-#define distance_between_points(x1, y1, x2, y2) \
-  (sqrt(pow((x2) - (x1), 2) + pow((y2) - (y1), 2)))
-
-// for movement
-#define DIAG_MULTIPLIER 0.7071f  // for diagonal movement
-#define DIAG_MULTIPLIER2 1.4142f
+namespace thoom {
 
 // screen related constants
-#define SCREEN_WIDTH 320
-#define SCREEN_HEIGHT 240
+#define THOOM_SCREEN_WIDTH 320
+#define THOOM_SCREEN_HEIGHT 240
 
 // ui box related things
 #define BOX_CONTAINER 0
@@ -95,14 +76,6 @@
     exit(1);                                                                 \
   }
 
-// game_const.cpp
-
-int direction_from_dirs(int x_dir, int y_dir);
-void dirs_from_direction(int direction, int* x_dir, int* y_dir);
-void dir_to_point(float x1, float y1, float x2, float y2, int* x_dir,
-                  int* y_dir);
-const char* next_line(const char* arr);
-
 class Game {
  public:
   // game_step.cpp
@@ -118,8 +91,6 @@ class Game {
 
   // game_const.cpp
 
-  void make_map_rect(int x, int y, int w, int h, SDL_FRect* src_rect,
-                     SDL_FRect* dst_rect) const;
   bool point_in_collider(float x, float y) const;
   bool in_sight(int x0, int y0, int x1, int y1, int* next_x,
                 int* next_y) const;  // true if no colliders in way
@@ -277,4 +248,4 @@ extern SDL_Renderer* renderer;
 extern Game* game;
 extern bool _running;
 
-#endif
+};  // namespace thoom

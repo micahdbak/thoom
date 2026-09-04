@@ -1,11 +1,12 @@
-#ifndef FONT_H
-#define FONT_H
+#pragma once
 
 #include <SDL3/SDL.h>
 
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+namespace thoom {
 
 #define NUM_DISPLAYABLE_CHARS ('~' - ' ' + 1)
 #define FONT_SHEET_COLS 16
@@ -61,4 +62,4 @@ class Font {
   SDL_Texture* texture = nullptr;
 };
 
-#endif
+};  // namespace thoom

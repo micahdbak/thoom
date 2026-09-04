@@ -10,6 +10,9 @@
 #include "game.h"
 #include "net_agent.h"
 #include "save_data.h"
+#include "utils.h"
+
+namespace thoom {
 
 #define FATALITY(errfunc)                                              \
   {                                                                    \
@@ -29,13 +32,16 @@ Game::Game() {
   // create textures
   this->screen =
       SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
-                        SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+                        SDL_TEXTUREACCESS_TARGET, THOOM_SCREEN_WIDTH,
+                        THOOM_SCREEN_HEIGHT);
   this->ui =
       SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
-                        SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+                        SDL_TEXTUREACCESS_TARGET, THOOM_SCREEN_WIDTH,
+                        THOOM_SCREEN_HEIGHT);
   this->overlay =
       SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
-                        SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+                        SDL_TEXTUREACCESS_TARGET, THOOM_SCREEN_WIDTH,
+                        THOOM_SCREEN_HEIGHT);
   if (this->screen == nullptr || this->ui == nullptr ||
       this->overlay == nullptr)
     FATALITY("SDL_CreateTexture")
@@ -344,12 +350,12 @@ void Game::step() {
   SDL_RenderClear(renderer);
 
   // render background
-  SDL_FRect map_src = SDL_FRect{0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
-  SDL_FRect map_dst = SDL_FRect{0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+  SDL_FRect map_src = SDL_FRect{0, 0, THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT};
+  SDL_FRect map_dst = SDL_FRect{0, 0, THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT};
 
   if (this->bg != nullptr) {
-    this->make_map_rect(this->corner_x, this->corner_y, this->bg->w,
-                        this->bg->h, &map_src, &map_dst);
+    make_map_rect(this->corner_x, this->corner_y, this->bg->w, this->bg->h,
+                  &map_src, &map_dst);
     SDL_RenderTexture(renderer, this->bg, &map_src, &map_dst);
   }
 
@@ -388,3 +394,5 @@ void Game::step() {
 
   SDL_SetRenderTarget(renderer, NULL);
 }
+
+};  // namespace thoom

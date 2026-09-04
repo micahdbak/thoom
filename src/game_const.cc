@@ -1,112 +1,7 @@
 #include "game.h"
+#include "utils.h"
 
-int direction_from_dirs(int x_dir, int y_dir) {
-  if (x_dir < 0) {
-    return 6 + y_dir;
-  } else if (x_dir > 0) {
-    return 2 - y_dir;
-  } else if (y_dir < 0) {
-    return 4;
-  } else {
-    return 0;
-  }
-}
-
-void dirs_from_direction(int direction, int* x_dir, int* y_dir) {
-  switch (direction) {
-    case 0:
-      *x_dir = 0, *y_dir = 1;
-      break;
-    case 1:
-      *x_dir = 1, *y_dir = 1;
-      break;
-    case 2:
-      *x_dir = 1, *y_dir = 0;
-      break;
-    case 3:
-      *x_dir = 1, *y_dir = -1;
-      break;
-    case 4:
-      *x_dir = 0, *y_dir = -1;
-      break;
-    case 5:
-      *x_dir = -1, *y_dir = -1;
-      break;
-    case 6:
-      *x_dir = -1, *y_dir = 0;
-      break;
-    case 7:
-      *x_dir = -1, *y_dir = 1;
-      break;
-    default:
-      break;
-  }
-}
-
-void dir_to_point(float x1, float y1, float x2, float y2, int* x_dir,
-                  int* y_dir) {
-  float angle = atan2(y2 - y1, x2 - x1);  // [-M_PI,M_PI]
-  angle += M_PI;                          // [0,2.0*M_PI]
-  angle /= M_PI;                          // [0,2.0]
-  angle *= 4.0f;                          // [0,8.0]
-  angle += 0.5f;                          // [0.5,8.5] - for integer rounding
-
-  switch (int(angle)) {
-    case 0:
-      *x_dir = -1, *y_dir = 0;
-      break;
-    case 1:
-      *x_dir = -1, *y_dir = -1;
-      break;
-    case 2:
-      *x_dir = 0, *y_dir = -1;
-      break;
-    case 3:
-      *x_dir = 1, *y_dir = -1;
-      break;
-    case 4:
-      *x_dir = 1, *y_dir = 0;
-      break;
-    case 5:
-      *x_dir = 1, *y_dir = 1;
-      break;
-    case 6:
-      *x_dir = 0, *y_dir = 1;
-      break;
-    case 7:
-      *x_dir = -1, *y_dir = 1;
-      break;
-    case 8:
-      *x_dir = -1, *y_dir = 0;
-      break;
-  }
-}
-
-void Game::make_map_rect(int x, int y, int w, int h, SDL_FRect* src_rect,
-                         SDL_FRect* dst_rect) const {
-  if (x < 0) {
-    dst_rect->x = float(-1 * x);
-    dst_rect->w = float(cnf_min(SCREEN_WIDTH, w));
-    src_rect->x = 0.0f;
-  } else {
-    dst_rect->x = 0.0f;
-    dst_rect->w = float(cnf_min(SCREEN_WIDTH, w - x));
-    src_rect->x = float(x);
-  }
-
-  if (y < 0) {
-    dst_rect->y = float(-1 * y);
-    dst_rect->h = float(cnf_min(SCREEN_HEIGHT, h));
-    src_rect->y = 0.0f;
-  } else {
-    dst_rect->y = 0.0f;
-    dst_rect->h = float(cnf_min(SCREEN_HEIGHT, h - y));
-    src_rect->y = float(y);
-  }
-
-  src_rect->w = dst_rect->w;
-  src_rect->h = dst_rect->h;
-}
+namespace thoom {
 
 // below `_sign` and `_point_in_triangle` functions from:
 // https://stackoverflow.com/questions/2049582/how-to-determine-if-a-point-is-in-a-2d-triangle
@@ -215,10 +110,10 @@ void Game::random_target(int x, int y, int* next_x, int* next_y) const {
 
   std::vector<std::pair<int, int>> candidates;
 
-  int start_x = cnf_clamp(x - 1, 0, this->cols - 1);
-  int start_y = cnf_clamp(y - 1, 0, this->rows - 1);
-  int end_x = cnf_clamp(x + 1, 0, this->cols - 1);
-  int end_y = cnf_clamp(y + 1, 0, this->rows - 1);
+  int start_x = THOOM_CLAMP(x - 1, 0, this->cols - 1);
+  int start_y = THOOM_CLAMP(y - 1, 0, this->rows - 1);
+  int end_x = THOOM_CLAMP(x + 1, 0, this->cols - 1);
+  int end_y = THOOM_CLAMP(y + 1, 0, this->rows - 1);
 
   for (int _x = start_x; _x <= end_x; _x++) {
     for (int _y = start_y; _y <= end_y; _y++) {
@@ -235,23 +130,4 @@ void Game::random_target(int x, int y, int* next_x, int* next_y) const {
   *next_y = target.second * this->tile_height;
 }
 
-static char nullbyte = '\0';
-
-const char* next_line(const char* arr) {
-  size_t i = 0;
-
-  while (*arr != '\n' && *arr != '\0' && i < 1024) {
-    arr++;
-    i++;
-  }
-
-  if (i >= 1024) {
-    return &nullbyte;
-  }
-
-  if (*arr == '\n') {
-    arr++;
-  }
-
-  return arr;
-}
+};  // namespace thoom

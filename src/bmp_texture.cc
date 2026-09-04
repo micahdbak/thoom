@@ -6,6 +6,9 @@
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_surface.h"
 #include "game.h"
+#include "utils.h"
+
+namespace thoom {
 
 static std::unordered_map<std::string, SDL_Texture* (*)(const std::string&)>
     render_functions;
@@ -49,7 +52,7 @@ static SDL_Texture* render_cheese(const std::string& args) {
 
     y -= 6;
     x += SDL_rand(2) ? 1 : -1;
-    if (x != cnf_clamp(x, 0, 2)) x = 1;
+    if (x != THOOM_CLAMP(x, 0, 2)) x = 1;
   } while (_amount > 0);
   SDL_SetRenderTarget(renderer, game->screen);
 
@@ -64,7 +67,8 @@ static SDL_Texture* render_credits(const std::string& args) {
 
   SDL_Texture* texture =
       SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                        SDL_TEXTUREACCESS_TARGET, SCREEN_WIDTH, SCREEN_HEIGHT);
+                        SDL_TEXTUREACCESS_TARGET, THOOM_SCREEN_WIDTH,
+                        THOOM_SCREEN_HEIGHT);
   if (texture == nullptr) {
     std::cerr << "render_credits error: " << SDL_GetError() << std::endl;
     exit(1);
@@ -153,3 +157,5 @@ std::string credits_args(int ants, int drones, int tanks, int agents,
            queen_time);
   return std::string(buf);
 }
+
+};  // namespace thoom

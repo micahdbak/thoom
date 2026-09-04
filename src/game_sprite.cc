@@ -2,9 +2,11 @@
 
 #include "game.h"
 
+namespace thoom {
+
 void Game::set_view(int x, int y) {
-  this->corner_x = x - SCREEN_WIDTH / 2;
-  this->corner_y = y - SCREEN_HEIGHT / 2;
+  this->corner_x = x - THOOM_SCREEN_WIDTH / 2;
+  this->corner_y = y - THOOM_SCREEN_HEIGHT / 2;
 }
 
 void Game::push_sprite(const std::string& tex_id, SDL_Texture* texture,
@@ -37,7 +39,7 @@ void Game::push_icon(SDL_FRect icon_rect, float x, float y, SDL_FRect* src_rect,
   dst_rect->h = src_rect->h;
 
   this->push_sprite("sprites/icons.bmp", this->icons, src_rect, dst_rect,
-                    SCREEN_HEIGHT);
+                    THOOM_SCREEN_HEIGHT);
 }
 
 void Game::push_health_bar(int health, int max_health, float x, float y,
@@ -60,5 +62,7 @@ void Game::push_health_bar(int health, int max_health, float x, float y,
   dst_rect->h = src_rect->h;
 
   game->push_sprite("sprites/icons.bmp", this->icons, src_rect, dst_rect,
-                    SCREEN_HEIGHT);
+                    THOOM_SCREEN_HEIGHT);
 }
+
+};  // namespace thoom

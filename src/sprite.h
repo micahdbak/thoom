@@ -1,9 +1,10 @@
-#ifndef SPRITE_H
-#define SPRITE_H
+#pragma once
 
 #include <SDL3/SDL.h>
 
 #include <string>
+
+namespace thoom {
 
 class Sprite {
  public:
@@ -24,4 +25,4 @@ class Sprite {
   Uint64 frame_last_set;
 };
 
-#endif
+};  // namespace thoom

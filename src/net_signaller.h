@@ -1,8 +1,9 @@
-#ifndef NET_SIGNALLER_H
-#define NET_SIGNALLER_H
+#pragma once
 
 #include <queue>
 #include <string>
+
+namespace thoom {
 
 class NetworkSignaller {
  public:
@@ -30,4 +31,4 @@ class NetworkSignaller {
   std::queue<std::string> messages;
 };
 
-#endif
+};  // namespace thoom

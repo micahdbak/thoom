@@ -5,6 +5,8 @@
 #include "bmp_texture.h"
 #include "game.h"
 
+namespace thoom {
+
 Sprite::Sprite(const char* bmp_path, int frame_w, int frame_h, int interval_ms)
     : frame_w(frame_w), frame_h(frame_h), interval_ms(interval_ms) {
   this->texture = load_bmp_texture(bmp_path);
@@ -51,3 +53,5 @@ void Sprite::set_frame(int frame_i) {
   this->frame.x = float(this->frame_i * this->frame_w) + 0.1f;
   this->frame_last_set = game->ticks;
 }
+
+};  // namespace thoom

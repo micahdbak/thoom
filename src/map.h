@@ -1,10 +1,11 @@
-#ifndef MAP_H
-#define MAP_H
+#pragma once
 
 #include <SDL3/SDL.h>
 
 #include <string>
 #include <vector>
+
+namespace thoom {
 
 class Tilesheet {
  public:
@@ -129,4 +130,4 @@ class Map {
   int* collision;        // free with `free`
 };
 
-#endif
+};  // namespace thoom

@@ -4,6 +4,8 @@
 
 #include "game.h"
 
+namespace thoom {
+
 void Font::load_fonts(std::vector<Font*>& fonts) {
   // MONO_FONT = 0
   fonts.push_back(new Font("fonts/mono.bmp", 6, 10, 6, {}));
@@ -107,3 +109,5 @@ int Font::text_width(const std::string& text) {
 
   return w;
 }
+
+};  // namespace thoom

@@ -53,6 +53,7 @@ add_library(thoom
   src/net_signaller.cc
   src/save_data.cc
   src/sprite.cc
+  src/utils.cc
 )
 target_include_directories(thoom PUBLIC src)
 target_link_libraries(thoom

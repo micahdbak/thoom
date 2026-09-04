@@ -9,6 +9,9 @@
 #include "game.h"
 #include "map.h"
 #include "save_data.h"
+#include "utils.h"
+
+namespace thoom {
 
 void Game::draw_rect(SDL_Texture* texture, SDL_FRect* rect, Uint8 r, Uint8 g,
                      Uint8 b, Uint8 a, SDL_BlendMode blend_mode) {
@@ -37,7 +40,7 @@ void Game::draw_outline(SDL_Texture* texture, SDL_FRect* rect, Uint8 r, Uint8 g,
 void Game::draw_ui_box(SDL_Texture* texture, int type, SDL_FRect* rect) {
   SDL_SetRenderTarget(renderer, texture);
 
-  SDL_FRect _rect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+  SDL_FRect _rect = {0, 0, THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT};
   if (rect == NULL) {
     rect = &_rect;
   }
@@ -335,7 +338,7 @@ void Game::draw_overlay() {
       int y_dir =
           captured_controller.is_hit(DOWN) - captured_controller.is_hit(UP);
       int new_sel_control =
-          cnf_clamp(_sel_control + y_dir, -3, (int)Button::DIGIT - 1);
+          THOOM_CLAMP(_sel_control + y_dir, -3, (int)Button::DIGIT - 1);
 
       if (captured_controller.is_hit(Button::SELECT) && _sel_control == -3) {
         game->map = "maps/init";
@@ -352,11 +355,11 @@ void Game::draw_overlay() {
       int x_dir =
           captured_controller.is_hit(RIGHT) - captured_controller.is_hit(LEFT);
       if (_sel_control == -2 && x_dir != 0) {
-        game->volume = cnf_clamp(game->volume + (10 * x_dir), 0, 200);
+        game->volume = THOOM_CLAMP(game->volume + (10 * x_dir), 0, 200);
         should_render = true;
       } else if (_sel_control == -1 && x_dir != 0) {
         game->music_volume =
-            cnf_clamp(game->music_volume + (10 * x_dir), 0, 200);
+            THOOM_CLAMP(game->music_volume + (10 * x_dir), 0, 200);
         should_render = true;
       }
 
@@ -565,3 +568,5 @@ void Game::draw_overlay() {
     }
   }
 }
+
+};  // namespace thoom

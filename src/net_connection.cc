@@ -8,6 +8,8 @@
 
 #define NTS -1
 
+namespace thoom {
+
 static const char* ICE_SERVERS[] = {"stun:droppr.net:5051",
                                     "turn:droppr:droppr@droppr.net:5051"};
 
@@ -197,3 +199,5 @@ void NetworkConnection::on_message(int, const char* message, int size,
   }
   connection->messages.push(message);
 }
+
+};  // namespace thoom
