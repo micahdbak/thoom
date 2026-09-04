@@ -1,0 +1,6 @@
+**/*.DS_Store
+**/*.backup.*
+.cache
+.vscode
+build
+build-rel
