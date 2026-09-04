@@ -10,46 +10,10 @@
 
 #include "game.h"
 
-#ifdef _WIN32
-#include <direct.h>  // _mkdir
-#endif
-
 SaveData save;
 
-static void _mkdir_if_not_exists(char* save_root, size_t save_root_size) {
-// macOS or Linux/*BSD/UNIX systems
-#if defined(__APPLE__) || defined(__unix__)
-  const char* home = getenv("HOME");
-  if (home == NULL) {
-    std::cerr << "SaveData::_mkdir_if_not_exists error: $HOME unset."
-              << std::endl;
-    exit(1);
-  }
-  snprintf(save_root, save_root_size,
-           "%s/Library/Application Support/CheddarAndFeta", home);
-
-  if (mkdir(save_root, 0755) == 0) return;
-// windows
-#elif defined(_WIN32)
-  // use getenv("AppData") to get that dir
-  const char* app_data = getenv("AppData");
-  if (app_data == NULL) {
-    std::cerr << "SaveData::_mkdir_if_not_exists error: %%AppData%% unset."
-              << std::endl;
-    exit(1);
-  }
-  snprintf(save_root, save_root_size, "%s/CheddarAndFeta", app_data);
-
-  if (_mkdir(save_root) == 0) return;
-#endif
-
-  // if directory already exists, that's okay
-  if (errno != EEXIST) {
-    std::cerr << "SaveData::_mkdir_if_not_exists error: mkdir has errno "
-              << errno << "." << std::endl;
-    exit(1);
-  }
-}
+#define PREF_ORG "CheddarAndFeta"
+#define PREF_APP "Game"
 
 #define CORRUPTED_EXIT                                                         \
   {                                                                            \
@@ -58,8 +22,8 @@ static void _mkdir_if_not_exists(char* save_root, size_t save_root_size) {
   }
 
 std::vector<std::string> SaveData::file_summaries() {
-  char save_root[1024], save_file_name[1024];
-  _mkdir_if_not_exists(save_root, sizeof(save_root));
+  char save_file_name[1024];
+  char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
   std::vector<std::string> summaries;
 
   for (int i = 0;; i++) {
@@ -82,6 +46,7 @@ std::vector<std::string> SaveData::file_summaries() {
     fclose(save_file);
   }
 
+  SDL_free(save_root);
   return summaries;
 }
 
@@ -99,12 +64,13 @@ static unsigned long _djb2_hash(unsigned long starting_hash, const char* str) {
 void SaveData::write_file(int file_i) {
   if (file_i < 0) CORRUPTED_EXIT
 
-  char save_root[1024], save_file_name[1024];
-  _mkdir_if_not_exists(save_root, sizeof(save_root));
+  char save_file_name[1024];
+  char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
 
   // open file
   snprintf(save_file_name, sizeof(save_file_name), "%s/save%d.txt", save_root,
            file_i);
+  SDL_free(save_root);
   FILE* save_file = fopen(save_file_name, "w");
   if (save_file == NULL) CORRUPTED_EXIT
 
@@ -144,14 +110,15 @@ void SaveData::write_file(int file_i) {
 int SaveData::load_file(int file_i) {
   if (file_i < 0) CORRUPTED_EXIT
 
-  char save_root[1024], save_file_name[1024];
-  _mkdir_if_not_exists(save_root, sizeof(save_root));
+  char save_file_name[1024];
+  char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
 
   this->data.clear();
 
   // open file
   snprintf(save_file_name, sizeof(save_file_name), "%s/save%d.txt", save_root,
            file_i);
+  SDL_free(save_root);
   FILE* save_file = fopen(save_file_name, "r");
   if (save_file == NULL) {
     return LOAD_NEW;
