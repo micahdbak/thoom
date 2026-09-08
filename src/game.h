@@ -15,6 +15,7 @@
 #include "map.h"
 #include "net_agent.h"
 #include "object.h"
+#include "sprite.h"
 
 namespace thoom {
 
@@ -105,13 +106,6 @@ class Game {
     int count;
   };
 
-  void draw_rect(SDL_Texture* texture, SDL_FRect* rect, Uint8 r, Uint8 g,
-                 Uint8 b, Uint8 a, SDL_BlendMode blend_mode);
-  void draw_outline(SDL_Texture* texture, SDL_FRect* rect, Uint8 r, Uint8 g,
-                    Uint8 b, Uint8 a, SDL_BlendMode blend_mode);
-  void draw_ui_box(SDL_Texture* texture, int type, SDL_FRect* rect);
-  void draw_text(SDL_Texture* texture, std::string str, int font, int x, int y,
-                 int w);
   void draw_icon(SDL_Texture* texture, SDL_FRect src_rect, SDL_FRect* dst_rect);
   void draw_hud(SDL_Texture* texture, std::vector<HudItem> items, int sel_item,
                 int health, int max_health);
@@ -156,10 +150,11 @@ class Game {
   Uint64 ticks = 0;
   float delta = 0;
 
-  SDL_Texture *screen, *ui, *overlay;
+  SDL_Texture *ui, *overlay;
 
   std::vector<Font*> fonts;
   SDL_Texture* icons;
+  SDL_Texture* ui_box = nullptr;
 
   int corner_x = 0, corner_y = 0;  // set in Game::step
   int tile_width = 32, tile_height = 32, cols = 1, rows = 1;
@@ -178,17 +173,6 @@ class Game {
   // is set to true when deleting objects before loading a map (for use in obj
   // destructors)
   bool deleting_objects = false;
-
-  struct SpriteRender {
-    std::string tex_id;
-    SDL_Texture* texture = nullptr;
-    SDL_FRect *src_rect, *dst_rect;
-    int y;
-
-    bool operator<(const SpriteRender& other) const {
-      return this->y < other.y;
-    }
-  };
 
   // sprite rendering things
   std::vector<SpriteRender> sprites;
@@ -230,7 +214,6 @@ class Game {
   Object *first_obj = nullptr, *last_obj = nullptr;
 
   // ui things
-  SDL_Texture* ui_box = nullptr;
   std::queue<Text> texts;
 
   SDL_FRect item_count_icon, item_cooldown_icon;
@@ -244,7 +227,6 @@ class Game {
   std::string ambience;
 };
 
-extern SDL_Renderer* renderer;
 extern Game* game;
 extern bool _running;
 

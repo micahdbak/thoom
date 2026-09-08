@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "game.h"
+#include "renderer.h"
 
 namespace thoom {
 
@@ -21,7 +22,8 @@ Tilesheet::Tilesheet(const char* tilesheet_path, int tile_width,
   this->cols = tilesheet_surface->w / tile_width;
   this->rows = tilesheet_surface->h / tile_height;
 
-  this->texture = SDL_CreateTextureFromSurface(renderer, tilesheet_surface);
+  this->texture = Renderer::instance->create_texture_from_surface(
+      tilesheet_surface, SDL_SCALEMODE_LINEAR);
   SDL_DestroySurface(tilesheet_surface);
   tilesheet_surface = nullptr;
 
@@ -62,26 +64,23 @@ void Map::make_empty(int tile_width, int tile_height, int cols, int rows) {
   this->cols = cols;
   this->rows = rows;
 
-  this->bg = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                               SDL_TEXTUREACCESS_TARGET, cols * tile_width,
-                               rows * tile_height);
-  this->fg = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                               SDL_TEXTUREACCESS_TARGET, cols * tile_width,
-                               rows * tile_height);
+  Renderer* renderer = Renderer::instance;
+
+  this->bg =
+      renderer->create_texture(cols * tile_width, rows * tile_height,
+                               SDL_PIXELFORMAT_RGBA8888, SDL_SCALEMODE_LINEAR);
+  this->fg =
+      renderer->create_texture(cols * tile_width, rows * tile_height,
+                               SDL_PIXELFORMAT_RGBA8888, SDL_SCALEMODE_LINEAR);
 
   if (this->bg == nullptr || this->fg == nullptr) {
     std::cerr << "SDL_CreateTexture error: " << SDL_GetError() << std::endl;
     exit(1);
   }
 
-  SDL_SetRenderTarget(renderer, this->bg);
-  SDL_SetRenderDrawColor(renderer, this->bg_r, this->bg_g, this->bg_b, 255);
-  SDL_RenderFillRect(renderer, NULL);
-  SDL_SetRenderTarget(renderer, this->fg);
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-  SDL_RenderFillRect(renderer, NULL);
-  SDL_SetRenderTarget(renderer, game->screen);
+  renderer->clear(this->bg, Colour(uint8_t(this->bg_r), uint8_t(this->bg_g),
+                                   uint8_t(this->bg_b)));
+  renderer->clear(this->fg, kMask);
 }
 
 void Map::read(const char* map_path) {
@@ -214,8 +213,6 @@ void Map::read(const char* map_path) {
   for (int i = 0; i < this->cols * this->rows; i++) {
     render_tile(i % this->cols, i / this->cols);
   }
-
-  SDL_SetRenderTarget(renderer, game->screen);
 }
 
 static inline void write_tile(uint8_t* buffer, Tile tile, int x, int y,
@@ -314,15 +311,18 @@ void Map::clear() {
 }
 
 void Map::render_tile(int x, int y) {
+  Renderer* renderer = Renderer::instance;
+
   SDL_FRect dst_rect;
   dst_rect.x = float(this->tile_width * x);
   dst_rect.y = float(this->tile_width * y);
   dst_rect.w = float(this->tile_width);
   dst_rect.h = float(this->tile_height);
 
-  SDL_SetRenderTarget(renderer, this->bg);
-  SDL_SetRenderDrawColor(renderer, this->bg_r, this->bg_g, this->bg_b, 255);
-  SDL_RenderFillRect(renderer, &dst_rect);  // fill a black square
+  renderer->draw_rect(
+      this->bg, &dst_rect,
+      Colour(uint8_t(this->bg_r), uint8_t(this->bg_g), uint8_t(this->bg_b)),
+      SDL_BLENDMODE_NONE);
 
   // render bg tiles
   std::vector<Tile>* vec = this->bg_tiles[(y * this->cols) + x];
@@ -335,15 +335,13 @@ void Map::render_tile(int x, int y) {
     for (auto tile : *vec) {
       src_rect.x = float(this->tile_width * tile.x);
       src_rect.y = float(this->tile_height * tile.y);
-      SDL_RenderTexture(renderer, this->tilesheets[tile.tilesheet]->texture,
-                        &src_rect, &dst_rect);
+      renderer->draw_texture(this->bg,
+                             this->tilesheets[tile.tilesheet]->texture,
+                             &src_rect, &dst_rect);
     }
   }
 
-  SDL_SetRenderTarget(renderer, this->fg);
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
-  SDL_RenderFillRect(renderer, &dst_rect);  // fill a transparent square
+  renderer->draw_rect(this->fg, &dst_rect, kMask, SDL_BLENDMODE_NONE);
 
   // render fg tiles
   vec = this->fg_tiles[(y * this->cols) + x];
@@ -356,8 +354,9 @@ void Map::render_tile(int x, int y) {
     for (auto tile : *vec) {
       src_rect.x = float(this->tile_width * tile.x);
       src_rect.y = float(this->tile_height * tile.y);
-      SDL_RenderTexture(renderer, this->tilesheets[tile.tilesheet]->texture,
-                        &src_rect, &dst_rect);
+      renderer->draw_texture(this->fg,
+                             this->tilesheets[tile.tilesheet]->texture,
+                             &src_rect, &dst_rect);
     }
   }
 }

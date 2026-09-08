@@ -51,11 +51,16 @@ add_library(thoom
   src/net_agent.cc
   src/net_connection.cc
   src/net_signaller.cc
+  src/renderer.cc
   src/save_data.cc
   src/sprite.cc
   src/utils.cc
 )
-target_include_directories(thoom PUBLIC src)
+
+target_include_directories(thoom
+  PUBLIC include
+  PUBLIC src)
+
 target_link_libraries(thoom
   PUBLIC LibDataChannel::LibDataChannel SDL3::SDL3
   PRIVATE sanitizers)

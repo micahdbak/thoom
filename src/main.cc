@@ -1,78 +1,28 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include <cstdlib>
-#include <iostream>
-
 #include "controller.h"
 #include "game.h"
+#include "renderer.h"
 #include "save_data.h"
-
-#if defined(__SANITIZE_ADDRESS__) || \
-    (defined(__has_feature) && __has_feature(address_sanitizer))
-#include <sanitizer/lsan_interface.h>
-#define LSAN_DISABLE() __lsan_disable()
-#define LSAN_ENABLE() __lsan_enable()
-#else
-#define LSAN_DISABLE()
-#define LSAN_ENABLE()
-#endif
-
-SDL_Window* window;
-SDL_Renderer* thoom::renderer;
 
 bool thoom::_running, thoom::capture_controls = false;
 thoom::Controller thoom::local_controller, thoom::remote_controller,
     thoom::captured_controller;
 thoom::Game* thoom::game;
-
 int thoom::_object_id_counter = 0;
 
-void cleanup();
-void scale_screen_rect(SDL_FRect* screen_rect, const int window_width,
-                       const int window_height);
-
 int main(int argc, char** argv) {
-  bool init_ok;
-
-  LSAN_DISABLE();
-  init_ok = SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
-  LSAN_ENABLE();
-
-  if (!init_ok) {
-    std::cerr << "SDL_Init error: " << SDL_GetError() << std::endl;
-    return 1;
-  }
-
-  int window_width = THOOM_SCREEN_WIDTH * 2,
-      window_height = THOOM_SCREEN_HEIGHT * 2;
-  if (!SDL_CreateWindowAndRenderer(argv[0], window_width, window_height,
-                                   SDL_WINDOW_RESIZABLE, &window,
-                                   &thoom::renderer)) {
-    std::cerr << "SDL_CreateWindowAndRenderer error: " << SDL_GetError()
-              << std::endl;
-    return 1;
-  }
-
-  // std::cout << "Renderer: " << SDL_GetRendererName(renderer) << std::endl;
-
-  SDL_SetRenderVSync(thoom::renderer, 1);
-
-  if (std::atexit(cleanup) != 0) {
-    std::cerr << "main error: couldn't register exit function" << std::endl;
-    cleanup();
-    return 1;
-  }
-
-  SDL_FRect screen_rect;
-  scale_screen_rect(&screen_rect, window_width, window_height);
+  thoom::Renderer::init("Thoom Engine", THOOM_SCREEN_WIDTH,
+                        THOOM_SCREEN_HEIGHT);
+  thoom::Renderer* renderer = thoom::Renderer::instance;
 
   thoom::_running = true;
   thoom::game = new thoom::Game();
   thoom::game->argc = argc;
   thoom::game->argv = argv;
   thoom::game->init();
-  SDL_SetWindowTitle(window, thoom::game->title.c_str());
+  renderer->set_window_title(thoom::game->title.c_str());
 
   while (thoom::_running) {
     SDL_Event event;
@@ -84,8 +34,7 @@ int main(int argc, char** argv) {
     while (SDL_PollEvent(&event)) {
       switch (event.type) {
         case SDL_EVENT_WINDOW_RESIZED:
-          SDL_GetWindowSizeInPixels(window, &window_width, &window_height);
-          scale_screen_rect(&screen_rect, window_width, window_height);
+          renderer->update_screen_scale();
           break;
 
         case SDL_EVENT_KEY_DOWN:
@@ -113,43 +62,14 @@ int main(int argc, char** argv) {
 
     controller->clear_hits();
 
-    SDL_SetRenderDrawColor(thoom::renderer, thoom::game->bg_r,
-                           thoom::game->bg_g, thoom::game->bg_b, 255);
-    SDL_RenderClear(thoom::renderer);
-    SDL_RenderTexture(thoom::renderer, thoom::game->screen, NULL, &screen_rect);
-    SDL_RenderPresent(thoom::renderer);
+    renderer->present(thoom::Colour{thoom::game->bg_r, thoom::game->bg_g,
+                                    thoom::game->bg_b, 255});
   }
 
-  exit(0);
-}
-
-void cleanup() {
   delete thoom::game;
   thoom::game = nullptr;
-  SDL_SetRenderTarget(thoom::renderer, NULL);
-  SDL_DestroyWindow(window);
-  SDL_DestroyRenderer(thoom::renderer);
-  SDL_Quit();
-}
 
-void scale_screen_rect(SDL_FRect* screen_rect, const int window_width,
-                       const int window_height) {
-  static const float screen_aspect_ratio_wtoh =
-      float(THOOM_SCREEN_WIDTH) / float(THOOM_SCREEN_HEIGHT);
-  static const float screen_aspect_ratio_htow =
-      float(THOOM_SCREEN_HEIGHT) / float(THOOM_SCREEN_WIDTH);
+  thoom::Renderer::shutdown();
 
-  float window_aspect_ratio = float(window_width) / float(window_height);
-
-  if (window_aspect_ratio > screen_aspect_ratio_wtoh) {
-    screen_rect->w = screen_aspect_ratio_wtoh * float(window_height);
-    screen_rect->h = float(window_height);
-    screen_rect->x = 0.5f * (float(window_width) - screen_rect->w);
-    screen_rect->y = 0.0f;
-  } else {
-    screen_rect->w = float(window_width);
-    screen_rect->h = screen_aspect_ratio_htow * float(window_width);
-    screen_rect->x = 0.0f;
-    screen_rect->y = 0.5f * (float(window_height) - screen_rect->h);
-  }
+  exit(0);
 }
