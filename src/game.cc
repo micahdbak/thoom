@@ -1,3 +1,6 @@
+#include "game.h"
+
+#include <algorithm>
 #include <iostream>
 
 #include "SDL3/SDL_blendmode.h"
@@ -7,7 +10,6 @@
 #include "bmp_texture.h"
 #include "controller.h"
 #include "font.h"
-#include "game.h"
 #include "net_agent.h"
 #include "renderer.h"
 #include "save_data.h"
@@ -15,62 +17,12 @@
 
 namespace thoom {
 
-#define FATALITY(errfunc)                                              \
-  {                                                                    \
-    std::cerr << errfunc << " error: " << SDL_GetError() << std::endl; \
-    std::exit(1);                                                      \
-  }
-
-#define DELETE_IF_NOT_NULLPTR(thing) \
-  if (thing != nullptr) {            \
-    delete thing;                    \
-    thing = nullptr;                 \
-  }
-
 std::unordered_map<uint64_t, std::string> debug_obj_ptrs;
 
 Game::Game() {
-  Renderer* renderer = Renderer::instance;
-
-  // create textures
-  this->ui =
-      renderer->create_texture(THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT,
-                               SDL_PIXELFORMAT_RGBA32, SDL_SCALEMODE_LINEAR);
-  this->overlay =
-      renderer->create_texture(THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT,
-                               SDL_PIXELFORMAT_RGBA32, SDL_SCALEMODE_LINEAR);
-
-  if (this->ui == nullptr || this->overlay == nullptr) {
-    FATALITY("SDL_CreateTexture")
-  }
-
-  renderer->clear(this->ui, kMask);
-  renderer->clear(this->overlay, kMask);
-
-  // load the ui box texture
-  SDL_Surface* ui_box_surface = SDL_LoadBMP("sprites/ui_box.bmp");
-  if (ui_box_surface == nullptr) FATALITY("SDL_LoadBMP")
-
-  this->ui_box = renderer->create_texture_from_surface(ui_box_surface,
-                                                       SDL_SCALEMODE_NEAREST);
-  if (this->ui_box == nullptr) FATALITY("SDL_CreateTextureFromSurface")
-  SDL_DestroySurface(ui_box_surface);
-
-  // load icons
-  SDL_Surface* icons_surface = SDL_LoadBMP("sprites/icons.bmp");
-  if (icons_surface == nullptr) FATALITY("SDL_LoadBMP")
-
-  this->icons = renderer->create_texture_from_surface(icons_surface,
-                                                      SDL_SCALEMODE_NEAREST);
-  if (this->icons == nullptr) FATALITY("SDL_CreateTextureFromSurface")
-  SDL_DestroySurface(icons_surface);
-
   this->ticks = SDL_GetTicks();
 
   Font::load_fonts(this->fonts);
-
-  this->item_count_icon = {HUD_MAIN_X + 18, HUD_MAIN_Y - 2, 16.0f, 16.0f};
-  this->item_cooldown_icon = {HUD_MAIN_X + 8, HUD_MAIN_Y + 4, 16.0f, 16.0f};
 
   load_render_functions();  // bmp_texture.h
 
@@ -80,25 +32,20 @@ Game::Game() {
 Game::~Game() {
   this->unload();
 
-  // destroy the ui texture
-  SDL_DestroyTexture(this->ui);
-  this->ui = nullptr;
+  if (this->first_obj != nullptr) {
+    delete this->first_obj;
+    this->first_obj = nullptr;
+  }
 
-  // destroy the overlay texture
-  SDL_DestroyTexture(this->overlay);
-  this->overlay = nullptr;
+  if (this->last_obj != nullptr) {
+    delete this->last_obj;
+    this->last_obj = nullptr;
+  }
 
-  // destroy the ui box texture
-  SDL_DestroyTexture(this->ui_box);
-  this->ui_box = nullptr;
-
-  // destroy the icons texture
-  SDL_DestroyTexture(this->icons);
-  this->icons = nullptr;
-
-  DELETE_IF_NOT_NULLPTR(this->first_obj);
-  DELETE_IF_NOT_NULLPTR(this->last_obj);
-  DELETE_IF_NOT_NULLPTR(net_agent);
+  if (net_agent != nullptr) {
+    delete net_agent;
+    net_agent = nullptr;
+  }
 
   // free factories
   for (auto pair : this->factories) delete pair.second;
@@ -144,9 +91,6 @@ void Game::unload() {
     free(this->collision);
     this->collision = nullptr;
   }
-
-  // clear ui
-  Renderer::instance->clear(this->ui, kMask);
 }
 
 void Game::load_map(const char* map_path) {
@@ -212,8 +156,6 @@ void Game::load_map(const char* map_path) {
 
   save.data[LOAD_MAP] = this->current_map;
 
-  this->display_notification(this->map_title + ", " + this->map_description);
-
   this->corner_x = 0;
   this->corner_y = 0;
 }
@@ -266,15 +208,6 @@ void Game::save_objects() {
 void Game::step() {
   Renderer* renderer = Renderer::instance;
 
-  // toggle controls menu
-  Controller* cur_controller =
-      capture_controls ? &captured_controller : &local_controller;
-  if (cur_controller->is_hit(Button::MENU)) {
-    cur_controller->clear_all();
-    this->display_controls_menu = !this->display_controls_menu;
-    capture_controls = this->display_controls_menu;
-  }
-
   // create new map
   if (this->map != "") {
     renderer->clear_screen(kBlack);
@@ -294,7 +227,6 @@ void Game::step() {
   this->ticks = new_ticks;
 
   this->net_state = net_agent->get_state();
-  this->draw_overlay();
 
   if (this->first_obj != nullptr) {
     this->first_obj->step();
@@ -355,16 +287,162 @@ void Game::step() {
   if (this->fg != nullptr)
     renderer->draw_texture(renderer->screen, this->fg, &map_src, &map_dst);
 
-  // render ui
-  renderer->draw_texture(renderer->screen, this->ui, NULL, NULL);
-
-  // render overlay
-  renderer->draw_texture(renderer->screen, this->overlay, NULL, NULL);
-
   if (local_controller.c == 'p' || captured_controller.c == 'p') {
     local_controller.c = NO_CHAR;
     renderer->save_screenshot("screenshot.bmp");
   }
+}
+
+void Game::set_view(int x, int y) {
+  this->corner_x = x - THOOM_SCREEN_WIDTH / 2;
+  this->corner_y = y - THOOM_SCREEN_HEIGHT / 2;
+}
+
+void Game::push_sprite(const std::string& tex_id, SDL_Texture* texture,
+                       SDL_FRect* src_rect, SDL_FRect* dst_rect,
+                       int depth_offset) {
+  int sprite_y = 0;
+
+  if (dst_rect != nullptr) sprite_y = (int)dst_rect->y + depth_offset;
+
+  SpriteRender sprite;
+  sprite.tex_id = tex_id;
+  sprite.texture = texture;
+  sprite.src_rect = src_rect;
+  sprite.dst_rect = dst_rect;
+  sprite.y = sprite_y;
+
+  // std::lower_bound performs a binary search (log n time complexity)
+  auto it =
+      std::lower_bound(this->sprites.begin(), this->sprites.end(), sprite);
+  this->sprites.insert(it, sprite);
+}
+
+// below `_sign` and `_point_in_triangle` functions from:
+// https://stackoverflow.com/questions/2049582/how-to-determine-if-a-point-is-in-a-2d-triangle
+
+static float _sign(SDL_FPoint p1, SDL_FPoint p2, SDL_FPoint p3) {
+  return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+}
+
+static bool _point_in_triangle(SDL_FPoint pt, SDL_FPoint v1, SDL_FPoint v2,
+                               SDL_FPoint v3) {
+  float d1, d2, d3;
+  bool has_neg, has_pos;
+
+  d1 = _sign(pt, v1, v2);
+  d2 = _sign(pt, v2, v3);
+  d3 = _sign(pt, v3, v1);
+
+  has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+  has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+  return !(has_neg && has_pos);
+}
+
+bool Game::point_in_collider(float x, float y) const {
+  // no collision
+  if (this->collision == nullptr) return false;
+
+  // flooring is intentional
+  int _x = int(x) / this->tile_width;
+  int _y = int(y) / this->tile_height;
+
+  // out of map is automatic collision
+  if (x < 0.0f || y < 0.0f || _x >= this->cols || _y >= this->rows) return true;
+
+  int coord = (_y * this->cols) + _x;
+
+  // no collider at point or invalid collider
+  if (this->collision[coord] < 0 || this->collision[coord] >= n_MapColliders)
+    return false;
+
+  Quad quad = this->colliders[this->collision[coord]];
+  SDL_FPoint point;
+  point.x = x - float(_x * this->tile_width);
+  point.y = y - float(_y * this->tile_width);
+
+  // return true if the point lies in either triangles making up the collider's
+  // quad
+  return _point_in_triangle(point, quad.vertex[0], quad.vertex[1],
+                            quad.vertex[2]) ||
+         _point_in_triangle(point, quad.vertex[2], quad.vertex[3],
+                            quad.vertex[0]);
+}
+
+bool Game::in_sight(int x0, int y0, int x1, int y1, int* next_x,
+                    int* next_y) const {
+  x0 = x0 / this->tile_width;
+  y0 = y0 / this->tile_width;
+  x1 = x1 / this->tile_width;
+  y1 = y1 / this->tile_height;
+
+  int dx = abs(x1 - x0);
+  int sx = x0 < x1 ? 1 : -1;
+  int dy = -abs(y1 - y0);
+  int sy = y0 < y1 ? 1 : -1;
+  int error = dx + dy;
+  bool next_set = false;
+
+  while (true) {
+    // return false if there is a collider in the way
+    if (this->collision[(y0 * this->cols) + x0] >= 0) return false;
+
+    int e2 = 2 * error;
+    if (e2 >= dy) {
+      if (x0 == x1) break;
+      error = error + dy;
+      x0 = x0 + sx;
+    }
+    if (e2 <= dx) {
+      if (y0 == y1) break;
+      error = error + dx;
+      y0 = y0 + sy;
+    }
+
+    if (!next_set && next_x != NULL && next_y != NULL) {
+      *next_x = x0 * this->tile_width;
+      *next_y = y0 * this->tile_height;
+      next_set = true;
+    }
+  }
+
+  if (!next_set && next_x != NULL && next_y != NULL) {
+    *next_x = x0 * this->tile_width;
+    *next_y = y0 * this->tile_height;
+    next_set = true;
+  }
+
+  // no colliders in the way; target is in sight
+  return true;
+}
+
+void Game::random_target(int x, int y, int* next_x, int* next_y) const {
+  if (next_x == NULL || next_y == NULL) return;  // legit wtf if this happens
+
+  x /= this->tile_width;
+  y /= this->tile_height;
+
+  std::vector<std::pair<int, int>> candidates;
+
+  int start_x = THOOM_CLAMP(x - 1, 0, this->cols - 1);
+  int start_y = THOOM_CLAMP(y - 1, 0, this->rows - 1);
+  int end_x = THOOM_CLAMP(x + 1, 0, this->cols - 1);
+  int end_y = THOOM_CLAMP(y + 1, 0, this->rows - 1);
+
+  for (int _x = start_x; _x <= end_x; _x++) {
+    for (int _y = start_y; _y <= end_y; _y++) {
+      if (_x == x && _y == y) continue;
+
+      if (this->collision[(_y * this->cols) + _x] < 0) {
+        candidates.push_back({_x, _y});
+      }
+    }
+  }
+
+  std::pair<int, int> target = candidates[SDL_rand(candidates.size())];
+  *next_x = target.first * this->tile_width;
+  *next_y = target.second * this->tile_height;
 }
 
 };  // namespace thoom
