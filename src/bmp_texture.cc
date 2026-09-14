@@ -19,7 +19,10 @@ static SDL_Texture* render_cheese(const std::string& args) {
   Renderer* renderer = Renderer::instance;
 
   int amount = 0;
-  if (1 != sscanf(args.c_str(), "%d", &amount)) FATAL_ERROR
+  if (1 != sscanf(args.c_str(), "%d", &amount)) {
+    // TODO(micahdbak): error
+    std::exit(1);
+  }
 
   SDL_Texture* cheese_texture = load_bmp_texture("sprites/cheese.bmp");
 
@@ -28,6 +31,7 @@ static SDL_Texture* render_cheese(const std::string& args) {
 
   SDL_Texture* texture = renderer->create_texture(
       w, h, SDL_PIXELFORMAT_RGBA8888, SDL_SCALEMODE_PIXELART);
+
   if (texture == nullptr) {
     std::cerr << "render_cheese error: " << SDL_GetError() << std::endl;
     exit(1);
@@ -62,8 +66,10 @@ static SDL_Texture* render_credits(const std::string& args) {
 
   int ants = 0, drones = 0, tanks = 0, agents = 0, queen_time = 0;
   if (5 != sscanf(args.c_str(), "%d.%d.%d.%d.%d", &ants, &drones, &tanks,
-                  &agents, &queen_time))
-    FATAL_ERROR
+                  &agents, &queen_time)) {
+    // TODO(micahdbak): error
+    std::exit(1);
+  }
 
   SDL_Texture* texture = renderer->create_texture(
       THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT, SDL_PIXELFORMAT_RGBA8888,

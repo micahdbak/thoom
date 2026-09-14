@@ -42,11 +42,8 @@ add_library(thoom
   src/bmp_texture.cc
   src/controller.cc
   src/font.cc
-  src/game_const.cc
-  src/game_draw.cc
-  src/game_sprite.cc
-  src/game_step.cc
-  src/main.cc
+
+  src/game.cc
   src/map.cc
   src/net_agent.cc
   src/net_connection.cc

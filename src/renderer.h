@@ -48,8 +48,6 @@ class Renderer {
   void draw_geometry(SDL_Texture* dst, SDL_Texture* texture,
                      const SDL_Vertex* vertices, int num_vertices,
                      const int* indices, int num_indices);
-  void draw_ui_box(SDL_Texture* ui_box, int type, SDL_Texture* dst,
-                   SDL_FRect* rect);
   void draw_text(SDL_Texture* dst, Font* font, std::string text, int x, int y,
                  int w, Colour bg);
   void draw_sprites(std::vector<SpriteRender>& sprites, SDL_FRect* viewport,

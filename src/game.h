@@ -23,64 +23,12 @@ namespace thoom {
 #define THOOM_SCREEN_WIDTH 320
 #define THOOM_SCREEN_HEIGHT 240
 
-// ui box related things
-#define BOX_CONTAINER 0
-#define BOX_OUT 1
-#define BOX_OUT_SEL 2
-#define BOX_MENU_CONT 3
-#define BOX_MENU_SHD1 4
-#define BOX_MENU_SHD2 5
-#define BOX_CHAR_CONT 6
-#define BOX_CHAR_BOX 7
-#define BOX_CHAR_SEL 8
-#define BOX_CHAR_DISP 9
-#define BOX_MAP_TITLE 10
-
-// icons
-#define CHEDDAR_ICON SDL_FRect{0.05f, 0.05f, 16.0f, 16.0f}
-#define FETA_ICON SDL_FRect{16.05f, 0.05f, 16.0f, 16.0f}
-#define NOT_CONNECTED_ICON SDL_FRect{32.05f, 0.05f, 16.0f, 16.0f}
-#define WAITING_FOR_PEER_ICON SDL_FRect{48.05f, 0.05f, 16.0f, 16.0f}
-#define SKULL_AND_BONES_ICON SDL_FRect{0.05f, 16.05f, 16.0f, 16.0f}
-#define EDITOR_OBJECT_ICON SDL_FRect{16.05f, 16.05f, 16.0f, 16.0f}
-#define DEBUG_HITBOX_ICON SDL_FRect{32.05f, 16.05f, 16.0f, 16.0f}
-#define DEBUG_HURTBOX_ICON SDL_FRect{48.05f, 16.05f, 16.0f, 16.0f}
-#define HEALTH_100_ICON SDL_FRect{0.05f, 32.05f, 16.0f, 8.0f}
-#define HEALTH_75_ICON SDL_FRect{16.05f, 32.05f, 16.0f, 8.0f}
-#define HEALTH_50_ICON SDL_FRect{32.05f, 32.05f, 16.0f, 8.0f}
-#define HEALTH_25_ICON SDL_FRect{48.05f, 32.05f, 16.0f, 8.0f}
-#define ITEM_COUNT_ICON SDL_FRect{16.05f, 40.05f, 16.0f, 16.0f}
-#define ITEM_COUNT_ICON_SHD SDL_FRect{32.05f, 40.05f, 16.0f, 16.0f}
-#define ITEM_COOLDOWN_0 SDL_FRect{0.05f, 56.05f, 16.0f, 16.0f}
-#define ITEM_COOLDOWN_1 SDL_FRect{16.05f, 56.05f, 16.0f, 16.0f}
-#define ITEM_COOLDOWN_2 SDL_FRect{32.05f, 56.05f, 16.0f, 16.0f}
-#define ITEM_COOLDOWN_3 SDL_FRect{48.05f, 56.05f, 16.0f, 16.0f}
-#define ITEM_COOLDOWN_4 SDL_FRect{64.05f, 56.05f, 16.0f, 16.0f}
-#define ITEM_COOLDOWN_5 SDL_FRect{80.05f, 56.05f, 16.0f, 16.0f}
-#define ITEM_COOLDOWN_6 SDL_FRect{96.05f, 56.05f, 16.0f, 16.0f}
-#define ITEM_COOLDOWN_7 SDL_FRect{112.05f, 56.05f, 16.0f, 16.0f}
-
 // forces one object to the be the first/last object run per frame
 #define FIRST_OBJ "_first"
 #define LAST_OBJ "_last"
 
-// hud coordinates
-#define HUD_ITEMS_X 32
-#define HUD_ITEMS_Y 204
-#define HUD_MAIN_X 12
-#define HUD_MAIN_Y 180
-
-#define FATAL_ERROR                                                          \
-  {                                                                          \
-    std::cerr << "Exiting due to fatal error in " << __FILE__ << " at line " \
-              << __LINE__ << "." << std::endl;                               \
-    exit(1);                                                                 \
-  }
-
 class Game {
  public:
-  // game_step.cpp
-
   Game();
   ~Game();
 
@@ -90,7 +38,9 @@ class Game {
   void save_objects();
   void step();
 
-  // game_const.cpp
+  void set_view(int x, int y);
+  void push_sprite(const std::string& tex_id, SDL_Texture* texture,
+                   SDL_FRect* src_rect, SDL_FRect* dst_rect, int depth_offset);
 
   bool point_in_collider(float x, float y) const;
   bool in_sight(int x0, int y0, int x1, int y1, int* next_x,
@@ -98,40 +48,11 @@ class Game {
   void random_target(int x, int y, int* next_x, int* next_y)
       const;  // chooses a random tile to move to, with no collider
 
-  // game_draw.cpp
-
-  // for draw_hud
-  struct HudItem {
-    std::string item_id;
-    int count;
-  };
-
-  void draw_icon(SDL_Texture* texture, SDL_FRect src_rect, SDL_FRect* dst_rect);
-  void draw_hud(SDL_Texture* texture, std::vector<HudItem> items, int sel_item,
-                int health, int max_health);
-  void draw_overlay();
-
-  // game_sprite.cpp
-
-  void set_view(int x, int y);
-  void push_sprite(const std::string& tex_id, SDL_Texture* texture,
-                   SDL_FRect* src_rect, SDL_FRect* dst_rect, int depth_offset);
-  void push_icon(SDL_FRect icon_rect, float x, float y, SDL_FRect* src_rect,
-                 SDL_FRect* dst_rect);
-  void push_health_bar(int health, int max_health, float x, float y,
-                       SDL_FRect* src_rect, SDL_FRect* dst_rect);
-
-  // defined per game (e.g., map_editor.cpp, init.cpp)
+  // defined per game (e.g., map_editor.cc, init.cc)
 
   void init();
 
   // quick funcs
-
-  void display_notification(std::string text) {
-    this->notification = text;
-    this->notif_ticks = this->ticks;
-    this->force_notif_rerender = true;
-  }
 
   Object* get_object(int id) {
     for (auto obj : this->objects) {
@@ -150,11 +71,7 @@ class Game {
   Uint64 ticks = 0;
   float delta = 0;
 
-  SDL_Texture *ui, *overlay;
-
   std::vector<Font*> fonts;
-  SDL_Texture* icons;
-  SDL_Texture* ui_box = nullptr;
 
   int corner_x = 0, corner_y = 0;  // set in Game::step
   int tile_width = 32, tile_height = 32, cols = 1, rows = 1;
@@ -199,8 +116,6 @@ class Game {
     int x, y;
   };
 
-  // game_step.cpp
-
   void load_map(const char* map_path);
 
   // map things
@@ -215,14 +130,6 @@ class Game {
 
   // ui things
   std::queue<Text> texts;
-
-  SDL_FRect item_count_icon, item_cooldown_icon;
-
-  std::string notification;
-  Uint64 notif_ticks;
-  bool force_notif_rerender = false;
-
-  bool display_controls_menu = false;
 
   std::string ambience;
 };
