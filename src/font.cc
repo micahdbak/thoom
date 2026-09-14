@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "game.h"
+#include "renderer.h"
 
 namespace thoom {
 
@@ -72,8 +73,8 @@ Font::Font(const char* font_path, int w, int h, int default_w,
               << std::endl;
     exit(1);
   }
-  this->texture = SDL_CreateTextureFromSurface(renderer, font_surface);
-  SDL_SetTextureScaleMode(this->texture, SDL_SCALEMODE_NEAREST);
+  this->texture = Renderer::instance->create_texture_from_surface(
+      font_surface, SDL_SCALEMODE_NEAREST);
   SDL_DestroySurface(font_surface);
 
   // create all src_rect's

@@ -52,8 +52,8 @@ void dirs_from_direction(int direction, int* x_dir, int* y_dir) {
 void dir_to_point(float x1, float y1, float x2, float y2, int* x_dir,
                   int* y_dir) {
   float angle = atan2(y2 - y1, x2 - x1);  // [-PI,PI]
-  angle += PI;                            // [0,2.0*PI]
-  angle /= PI;                            // [0,2.0]
+  angle += SDL_PI_D;                      // [0,2.0*PI]
+  angle /= SDL_PI_D;                      // [0,2.0]
   angle *= 4.0f;                          // [0,8.0]
   angle += 0.5f;                          // [0.5,8.5] - for integer rounding
 

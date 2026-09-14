@@ -9,6 +9,7 @@
 #include "font.h"
 #include "game.h"
 #include "net_agent.h"
+#include "renderer.h"
 #include "save_data.h"
 #include "utils.h"
 
@@ -29,47 +30,40 @@ namespace thoom {
 std::unordered_map<uint64_t, std::string> debug_obj_ptrs;
 
 Game::Game() {
+  Renderer* renderer = Renderer::instance;
+
   // create textures
-  this->screen =
-      SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24,
-                        SDL_TEXTUREACCESS_TARGET, THOOM_SCREEN_WIDTH,
-                        THOOM_SCREEN_HEIGHT);
   this->ui =
-      SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
-                        SDL_TEXTUREACCESS_TARGET, THOOM_SCREEN_WIDTH,
-                        THOOM_SCREEN_HEIGHT);
+      renderer->create_texture(THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT,
+                               SDL_PIXELFORMAT_RGBA32, SDL_SCALEMODE_LINEAR);
   this->overlay =
-      SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
-                        SDL_TEXTUREACCESS_TARGET, THOOM_SCREEN_WIDTH,
-                        THOOM_SCREEN_HEIGHT);
-  if (this->screen == nullptr || this->ui == nullptr ||
-      this->overlay == nullptr)
+      renderer->create_texture(THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT,
+                               SDL_PIXELFORMAT_RGBA32, SDL_SCALEMODE_LINEAR);
+
+  if (this->ui == nullptr || this->overlay == nullptr) {
     FATALITY("SDL_CreateTexture")
+  }
 
-  SDL_SetTextureScaleMode(this->screen, SDL_SCALEMODE_NEAREST);
-
-  this->draw_rect(this->ui, NULL, 0, 0, 0, 0, SDL_BLENDMODE_NONE);
-  this->draw_rect(this->overlay, NULL, 0, 0, 0, 0, SDL_BLENDMODE_NONE);
+  renderer->clear(this->ui, kMask);
+  renderer->clear(this->overlay, kMask);
 
   // load the ui box texture
   SDL_Surface* ui_box_surface = SDL_LoadBMP("sprites/ui_box.bmp");
   if (ui_box_surface == nullptr) FATALITY("SDL_LoadBMP")
 
-  this->ui_box = SDL_CreateTextureFromSurface(renderer, ui_box_surface);
+  this->ui_box = renderer->create_texture_from_surface(ui_box_surface,
+                                                       SDL_SCALEMODE_NEAREST);
   if (this->ui_box == nullptr) FATALITY("SDL_CreateTextureFromSurface")
   SDL_DestroySurface(ui_box_surface);
-
-  SDL_SetTextureScaleMode(this->ui_box, SDL_SCALEMODE_NEAREST);
 
   // load icons
   SDL_Surface* icons_surface = SDL_LoadBMP("sprites/icons.bmp");
   if (icons_surface == nullptr) FATALITY("SDL_LoadBMP")
 
-  this->icons = SDL_CreateTextureFromSurface(renderer, icons_surface);
+  this->icons = renderer->create_texture_from_surface(icons_surface,
+                                                      SDL_SCALEMODE_NEAREST);
   if (this->icons == nullptr) FATALITY("SDL_CreateTextureFromSurface")
   SDL_DestroySurface(icons_surface);
-
-  SDL_SetTextureScaleMode(this->icons, SDL_SCALEMODE_NEAREST);
 
   this->ticks = SDL_GetTicks();
 
@@ -85,10 +79,6 @@ Game::Game() {
 
 Game::~Game() {
   this->unload();
-
-  // destroy the screen
-  SDL_DestroyTexture(this->screen);
-  this->screen = nullptr;
 
   // destroy the ui texture
   SDL_DestroyTexture(this->ui);
@@ -156,7 +146,7 @@ void Game::unload() {
   }
 
   // clear ui
-  this->draw_rect(this->ui, NULL, 0, 0, 0, 0, SDL_BLENDMODE_NONE);
+  Renderer::instance->clear(this->ui, kMask);
 }
 
 void Game::load_map(const char* map_path) {
@@ -274,6 +264,8 @@ void Game::save_objects() {
 }
 
 void Game::step() {
+  Renderer* renderer = Renderer::instance;
+
   // toggle controls menu
   Controller* cur_controller =
       capture_controls ? &captured_controller : &local_controller;
@@ -285,11 +277,7 @@ void Game::step() {
 
   // create new map
   if (this->map != "") {
-    // clear the window
-    SDL_SetRenderTarget(renderer, NULL);
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    SDL_RenderClear(renderer);
-    SDL_RenderPresent(renderer);
+    renderer->clear_screen(kBlack);
 
     this->unload();
     this->load_map(this->map.c_str());
@@ -345,9 +333,8 @@ void Game::step() {
     this->last_obj->step();
   }
 
-  SDL_SetRenderTarget(renderer, this->screen);
-  SDL_SetRenderDrawColor(renderer, this->bg_r, this->bg_g, this->bg_b, 255);
-  SDL_RenderClear(renderer);
+  Colour bg{this->bg_r, this->bg_g, this->bg_b};
+  renderer->clear_screen(bg);
 
   // render background
   SDL_FRect map_src = SDL_FRect{0, 0, THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT};
@@ -356,43 +343,28 @@ void Game::step() {
   if (this->bg != nullptr) {
     make_map_rect(this->corner_x, this->corner_y, this->bg->w, this->bg->h,
                   &map_src, &map_dst);
-    SDL_RenderTexture(renderer, this->bg, &map_src, &map_dst);
+    renderer->draw_texture(renderer->screen, this->bg, &map_src, &map_dst);
   }
 
-  // make sure all sprites are blended, not replacing, pixels
-  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
-  // render objects to the screen
-  for (SpriteRender& sprite : this->sprites) {
-    // note: returns false if either is NULL, e.g., sprite.dst_rect
-    if (SDL_HasRectIntersectionFloat(&map_src, sprite.dst_rect)) {
-      SDL_FRect dst_rect = *sprite.dst_rect;
-      dst_rect.x -= game->corner_x;
-      dst_rect.y -= game->corner_y;
-      SDL_RenderTexture(renderer, sprite.texture, sprite.src_rect, &dst_rect);
-    }
-  }
+  renderer->draw_sprites(this->sprites, &map_src, this->corner_x,
+                         this->corner_y);
 
   this->sprites.clear();  // clear sprites; next frame will repopulate
 
   // render foreground
   if (this->fg != nullptr)
-    SDL_RenderTexture(renderer, this->fg, &map_src, &map_dst);
+    renderer->draw_texture(renderer->screen, this->fg, &map_src, &map_dst);
 
   // render ui
-  SDL_RenderTexture(renderer, this->ui, NULL, NULL);
+  renderer->draw_texture(renderer->screen, this->ui, NULL, NULL);
 
   // render overlay
-  SDL_RenderTexture(renderer, this->overlay, NULL, NULL);
+  renderer->draw_texture(renderer->screen, this->overlay, NULL, NULL);
 
   if (local_controller.c == 'p' || captured_controller.c == 'p') {
     local_controller.c = NO_CHAR;
-    SDL_Surface* _screen = SDL_RenderReadPixels(renderer, NULL);
-    SDL_SaveBMP(_screen, "screenshot.bmp");
-    SDL_DestroySurface(_screen);
+    renderer->save_screenshot("screenshot.bmp");
   }
-
-  SDL_SetRenderTarget(renderer, NULL);
 }
 
 };  // namespace thoom

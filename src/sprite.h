@@ -25,4 +25,14 @@ class Sprite {
   Uint64 frame_last_set;
 };
 
+struct SpriteRender {
+  std::string tex_id;
+  SDL_Texture* texture = nullptr;
+  SDL_FRect* src_rect;
+  SDL_FRect* dst_rect;
+  int y;
+
+  bool operator<(const SpriteRender& other) const { return this->y < other.y; }
+};
+
 };  // namespace thoom
