@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "renderer.h"
+#include "window.h"
 
 namespace thoom {
 
@@ -16,18 +17,17 @@ MapLayer::MapLayer(int cols, int rows, int tile_width, int tile_height,
   // zero the allocated memory
   memset(this->tiles, 0, nbytes);
 
-  Renderer* renderer = Renderer::instance;
 
-  this->texture =
-      renderer->create_texture(cols * tile_width, rows * tile_height,
-                               SDL_PIXELFORMAT_RGBA8888, SDL_SCALEMODE_LINEAR);
+  this->texture = thoom::Window::instance->create_texture(
+      cols * tile_width, rows * tile_height, SDL_PIXELFORMAT_RGBA8888,
+      SDL_SCALEMODE_LINEAR);
 
   if (this->texture == nullptr) {
     std::cerr << "SDL_CreateTexture error: " << SDL_GetError() << std::endl;
     exit(1);
   }
 
-  renderer->clear(this->texture, clear_colour);
+  thoom::Renderer::instance->clear(this->texture, clear_colour);
 
   this->clear_colour = clear_colour;
   this->count = cols * rows;
@@ -66,7 +66,6 @@ void MapLayer::add_tile(int coord, Tile tile) {
 void MapLayer::render_tile(int x, int y, int cols, int tile_width,
                            int tile_height,
                            const std::vector<Tilesheet*>& tilesheets) const {
-  Renderer* renderer = Renderer::instance;
 
   SDL_FRect dst_rect;
   dst_rect.x = float(tile_width * x);
@@ -74,7 +73,7 @@ void MapLayer::render_tile(int x, int y, int cols, int tile_width,
   dst_rect.w = float(tile_width);
   dst_rect.h = float(tile_height);
 
-  renderer->draw_rect(this->texture, &dst_rect, this->clear_colour,
+  Renderer::instance->draw_rect(this->texture, &dst_rect, this->clear_colour,
                       SDL_BLENDMODE_NONE);
 
   std::vector<Tile>* vec = this->tiles[(y * cols) + x];
@@ -88,7 +87,7 @@ void MapLayer::render_tile(int x, int y, int cols, int tile_width,
   for (auto tile : *vec) {
     src_rect.x = float(tile_width * tile.x);
     src_rect.y = float(tile_height * tile.y);
-    renderer->draw_texture(this->texture, tilesheets[tile.tilesheet]->texture,
+    Renderer::instance->draw_texture(this->texture, tilesheets[tile.tilesheet]->texture,
                            &src_rect, &dst_rect);
   }
 }

@@ -55,6 +55,7 @@ add_library(thoom
   src/sprite.cc
   src/tilesheet.cc
   src/utils.cc
+  src/window.cc
 )
 
 target_include_directories(thoom
