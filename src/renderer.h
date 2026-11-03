@@ -24,7 +24,7 @@ class Renderer {
   ~Renderer();
   DISALLOW_COPY_AND_MOVE(Renderer);
 
-  void set_view(int x, int y);
+  void set_view(float x, float y);
   void reset_view();
   float world_to_screen_x(float x) const;
   float world_to_screen_y(float y) const;
@@ -55,7 +55,7 @@ class Renderer {
   std::vector<SpriteRender> sprites;
 
  private:
-  int view_x = 0, view_y = 0;
+  float view_x = 0.0f, view_y = 0.0f;
 };
 
 };  // namespace thoom

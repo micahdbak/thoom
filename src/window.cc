@@ -6,6 +6,16 @@
 #include <cstdlib>
 #include <iostream>
 
+#if defined(__SANITIZE_ADDRESS__) || \
+    (defined(__has_feature) && __has_feature(address_sanitizer))
+#include <sanitizer/lsan_interface.h>
+#define LSAN_DISABLE() __lsan_disable()
+#define LSAN_ENABLE() __lsan_enable()
+#else
+#define LSAN_DISABLE()
+#define LSAN_ENABLE()
+#endif
+
 namespace thoom {
 
 void Window::init(const char* title, int screen_width, int screen_height) {
@@ -28,7 +38,13 @@ void Window::shutdown() {
 
 Window::Window(const char* title, int screen_width, int screen_height)
     : screen_width(screen_width), screen_height(screen_height) {
-  if (!SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
+  bool sdl_init;
+
+  LSAN_DISABLE();
+  sdl_init = SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
+  LSAN_ENABLE();
+
+  if (!sdl_init) {
     std::cerr << "SDL_Init error: " << SDL_GetError() << std::endl;
     std::exit(1);
   }

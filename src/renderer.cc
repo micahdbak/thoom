@@ -41,14 +41,14 @@ Renderer::~Renderer() {
   this->fonts.clear();
 }
 
-void Renderer::set_view(int x, int y) {
+void Renderer::set_view(float x, float y) {
   this->view_x = x;
   this->view_y = y;
 }
 
 void Renderer::reset_view() {
-  this->view_x = Window::instance->screen_width / 2;
-  this->view_y = Window::instance->screen_height / 2;
+  this->view_x = float(Window::instance->screen_width) / 2.0f;
+  this->view_y = float(Window::instance->screen_height) / 2.0f;
 }
 
 float Renderer::world_to_screen_x(float x) const {
@@ -251,8 +251,8 @@ void Renderer::draw_map_background(Map* map) {
   SDL_FRect src_rect = {0.0f, 0.0f, float(Window::instance->screen_width),
                         float(Window::instance->screen_height)};
   SDL_FRect dst_rect = src_rect;
-  int corner_x = this->view_x - Window::instance->screen_width / 2;
-  int corner_y = this->view_y - Window::instance->screen_height / 2;
+  int corner_x = int(this->view_x) - Window::instance->screen_width / 2;
+  int corner_y = int(this->view_y) - Window::instance->screen_height / 2;
 
   Map::make_map_rect(corner_x, corner_y, texture->w, texture->h, &src_rect,
                      &dst_rect);
@@ -268,8 +268,8 @@ void Renderer::draw_map_foreground(Map* map) {
   SDL_FRect src_rect = {0.0f, 0.0f, float(Window::instance->screen_width),
                         float(Window::instance->screen_height)};
   SDL_FRect dst_rect = src_rect;
-  int corner_x = this->view_x - Window::instance->screen_width / 2;
-  int corner_y = this->view_y - Window::instance->screen_height / 2;
+  int corner_x = int(this->view_x) - Window::instance->screen_width / 2;
+  int corner_y = int(this->view_y) - Window::instance->screen_height / 2;
 
   Map::make_map_rect(corner_x, corner_y, texture->w, texture->h, &src_rect,
                      &dst_rect);
@@ -302,8 +302,8 @@ void Renderer::draw_sprites() {
 
   SDL_FRect viewport = {0.0f, 0.0f, float(Window::instance->screen_width),
                         float(Window::instance->screen_height)};
-  int corner_x = this->view_x - Window::instance->screen_width / 2;
-  int corner_y = this->view_y - Window::instance->screen_height / 2;
+  int corner_x = int(this->view_x) - Window::instance->screen_width / 2;
+  int corner_y = int(this->view_y) - Window::instance->screen_height / 2;
 
   for (SpriteRender& sprite : this->sprites) {
     if (sprite.dst_rect == nullptr) continue;

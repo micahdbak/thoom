@@ -17,7 +17,6 @@ static std::unordered_map<std::string, SDL_Texture* (*)(const std::string&)>
 static std::unordered_map<std::string, SDL_Texture*> bmp_textures;
 
 static SDL_Texture* render_cheese(const std::string& args) {
-
   int amount = 0;
   if (1 != sscanf(args.c_str(), "%d", &amount)) {
     // TODO(micahdbak): error
@@ -62,7 +61,6 @@ static SDL_Texture* render_cheese(const std::string& args) {
 }
 
 static SDL_Texture* render_credits(const std::string& args) {
-
   int ants = 0, drones = 0, tanks = 0, agents = 0, queen_time = 0;
   if (5 != sscanf(args.c_str(), "%d.%d.%d.%d.%d", &ants, &drones, &tanks,
                   &agents, &queen_time)) {
