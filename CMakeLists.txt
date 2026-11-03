@@ -40,17 +40,20 @@ add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 add_library(thoom
   src/audio_playback.cc
   src/bmp_texture.cc
+  src/collider.cc
   src/controller.cc
   src/font.cc
 
   src/game.cc
   src/map.cc
+  src/map_layer.cc
   src/net_agent.cc
   src/net_connection.cc
   src/net_signaller.cc
   src/renderer.cc
   src/save_data.cc
   src/sprite.cc
+  src/tilesheet.cc
   src/utils.cc
 )
 

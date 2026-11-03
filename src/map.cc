@@ -1,41 +1,12 @@
 #include "map.h"
 
+#include <cstdlib>
 #include <iostream>
 
 #include "game.h"
-#include "renderer.h"
+#include "macros.h"
 
 namespace thoom {
-
-Tilesheet::Tilesheet(const char* tilesheet_path, int tile_width,
-                     int tile_height) {
-  SDL_Surface* tilesheet_surface = SDL_LoadBMP(tilesheet_path);
-  if (tilesheet_surface == nullptr) {
-    std::cerr << "Tilesheet::Tilesheet error: '" << tilesheet_path
-              << "' does not exist." << std::endl;
-    this->texture = nullptr;
-    this->cols = 0;
-    this->rows = 0;
-    return;
-  }
-
-  this->cols = tilesheet_surface->w / tile_width;
-  this->rows = tilesheet_surface->h / tile_height;
-
-  this->texture = Renderer::instance->create_texture_from_surface(
-      tilesheet_surface, SDL_SCALEMODE_LINEAR);
-  SDL_DestroySurface(tilesheet_surface);
-  tilesheet_surface = nullptr;
-
-  this->path = tilesheet_path;
-}
-
-Tilesheet::~Tilesheet() {
-  SDL_DestroyTexture(this->texture);
-  this->texture = nullptr;
-}
-
-Map::~Map() { this->clear(); }
 
 #define CORRUPTED_EXIT                                         \
   {                                                            \
@@ -44,46 +15,12 @@ Map::~Map() { this->clear(); }
     exit(1);                                                   \
   }
 
-void Map::make_empty(int tile_width, int tile_height, int cols, int rows) {
-  this->clear();
-
-  size_t nbytes = sizeof(std::vector<Tile>*) * cols * rows;
-  this->bg_tiles = (std::vector<Tile>**)malloc(nbytes);
-  this->fg_tiles = (std::vector<Tile>**)malloc(nbytes);
-  this->collision = (int*)malloc(sizeof(int) * cols * rows);
-
-  // zero the allocated memory
-  memset(this->bg_tiles, 0, nbytes);
-  memset(this->fg_tiles, 0, nbytes);
-  for (int i = 0; i < cols * rows; i++) {
-    this->collision[i] = -1;
-  }
-
-  this->tile_width = tile_width;
-  this->tile_height = tile_height;
-  this->cols = cols;
-  this->rows = rows;
-
-  Renderer* renderer = Renderer::instance;
-
-  this->bg =
-      renderer->create_texture(cols * tile_width, rows * tile_height,
-                               SDL_PIXELFORMAT_RGBA8888, SDL_SCALEMODE_LINEAR);
-  this->fg =
-      renderer->create_texture(cols * tile_width, rows * tile_height,
-                               SDL_PIXELFORMAT_RGBA8888, SDL_SCALEMODE_LINEAR);
-
-  if (this->bg == nullptr || this->fg == nullptr) {
-    std::cerr << "SDL_CreateTexture error: " << SDL_GetError() << std::endl;
+Map::Map(const char* map_path) {
+  if (map_path == nullptr) {
+    std::cerr << "map.cpp (" << __LINE__ << "): null map path." << std::endl;
     exit(1);
   }
 
-  renderer->clear(this->bg, Colour(uint8_t(this->bg_r), uint8_t(this->bg_g),
-                                   uint8_t(this->bg_b)));
-  renderer->clear(this->fg, kMask);
-}
-
-void Map::read(const char* map_path) {
   std::string map_txt_path = std::string(map_path) + ".txt";
   std::string map_bin_path = std::string(map_path) + ".bin";
 
@@ -121,7 +58,14 @@ void Map::read(const char* map_path) {
   this->ambience = buff;
 
   // allocate the necessary memory
-  this->make_empty(this->tile_width, this->tile_height, this->cols, this->rows);
+  this->layers[kBackgroundLayer] = new MapLayer(
+      this->cols, this->rows, this->tile_width, this->tile_height,
+      Colour(uint8_t(this->bg_r), uint8_t(this->bg_g), uint8_t(this->bg_b)));
+  this->layers[kForegroundLayer] = new MapLayer(
+      this->cols, this->rows, this->tile_width, this->tile_height, kMask);
+
+  this->collider =
+      new Collider(this->tile_width, this->tile_height, this->cols, this->rows);
 
   if (feof(txt_file)) CORRUPTED_EXIT;
   fgets(buff, sizeof(buff), txt_file);
@@ -171,7 +115,7 @@ void Map::read(const char* map_path) {
       // make sure the collider actually exists
       if (int(buffer[0]) >= n_MapColliders) CORRUPTED_EXIT
 
-      this->collision[coord] = int(buffer[0]);
+      this->collider->collision[coord] = int(buffer[0]);
       // buffer[1] and buffer[2] are redundant
       continue;
     }
@@ -188,31 +132,55 @@ void Map::read(const char* map_path) {
       CORRUPTED_EXIT
 
     // background or foreground tile
+    int layer_index;
     if (buffer[5] == 'b') {
-      std::vector<Tile>* vec = this->bg_tiles[coord];
-      if (vec == nullptr) {
-        vec = new std::vector<Tile>();
-        this->bg_tiles[coord] = vec;
-      }
-      vec->push_back(tile);
+      layer_index = kBackgroundLayer;
     } else if (buffer[5] == 'f') {
-      std::vector<Tile>* vec = this->fg_tiles[coord];
-      if (vec == nullptr) {
-        vec = new std::vector<Tile>();
-        this->fg_tiles[coord] = vec;
-      }
-      vec->push_back(tile);
-    } else
+      layer_index = kForegroundLayer;
+    } else {
       CORRUPTED_EXIT
+    }
+
+    this->layers[layer_index]->add_tile(coord, tile);
   }
 
   // done reading file
   fclose(bin_file);
+  this->path = map_path;
 
   // render all tiles read from the file
   for (int i = 0; i < this->cols * this->rows; i++) {
     render_tile(i % this->cols, i / this->cols);
   }
+}
+
+Map::Map(int tile_width, int tile_height, int cols, int rows) {
+  this->tile_width = tile_width;
+  this->tile_height = tile_height;
+  this->cols = cols;
+  this->rows = rows;
+
+  this->layers[kBackgroundLayer] = new MapLayer(
+      this->cols, this->rows, this->tile_width, this->tile_height,
+      Colour(uint8_t(this->bg_r), uint8_t(this->bg_g), uint8_t(this->bg_b)));
+  this->layers[kForegroundLayer] = new MapLayer(
+      this->cols, this->rows, this->tile_width, this->tile_height, kMask);
+
+  this->collider =
+      new Collider(this->tile_width, this->tile_height, this->cols, this->rows);
+}
+
+Map::~Map() {
+  for (Tilesheet* tilesheet : this->tilesheets) delete tilesheet;
+  this->tilesheets.clear();
+
+  delete this->layers[kBackgroundLayer];
+  this->layers[kBackgroundLayer] = nullptr;
+  delete this->layers[kForegroundLayer];
+  this->layers[kForegroundLayer] = nullptr;
+
+  delete this->collider;
+  this->collider = nullptr;
 }
 
 static inline void write_tile(uint8_t* buffer, Tile tile, int x, int y,
@@ -226,7 +194,7 @@ static inline void write_tile(uint8_t* buffer, Tile tile, int x, int y,
   fwrite(buffer, 1, 6, file);
 }
 
-void Map::write(const char* map_path) {
+void Map::write(const char* map_path) const {
   std::string map_txt_path = std::string(map_path) + ".txt";
   std::string map_bin_path = std::string(map_path) + ".bin";
 
@@ -261,7 +229,7 @@ void Map::write(const char* map_path) {
   for (int i = 0; i < this->cols * this->rows; i++) {
     int x = i % this->cols, y = i / this->cols;
     // colliders
-    int c = this->collision[i];
+    int c = this->collider->collision[i];
     if (c >= 0) {
       buffer[0] = uint8_t(c);
       buffer[1] = 'c';
@@ -273,92 +241,52 @@ void Map::write(const char* map_path) {
     }
 
     // background tiles
-    std::vector<Tile>* vec = this->bg_tiles[i];
-    if (vec != nullptr)
-      for (auto tile : *vec) write_tile(buffer, tile, x, y, 'b', bin_file);
+    std::vector<Tile>* bg_vec = this->layers[kBackgroundLayer]->tiles[i];
+    if (bg_vec != nullptr) {
+      for (auto tile : *bg_vec) write_tile(buffer, tile, x, y, 'b', bin_file);
+    }
 
     // foreground tiles
-    vec = this->fg_tiles[i];
-    if (vec != nullptr)
-      for (auto tile : *vec) write_tile(buffer, tile, x, y, 'f', bin_file);
+    std::vector<Tile>* fg_vec = this->layers[kForegroundLayer]->tiles[i];
+    if (fg_vec != nullptr) {
+      for (auto tile : *fg_vec) write_tile(buffer, tile, x, y, 'f', bin_file);
+    }
   }
 
   fclose(bin_file);
 }
 
-void Map::clear() {
-  for (Tilesheet* tilesheet : this->tilesheets) delete tilesheet;
-  this->tilesheets.clear();
-  if (this->bg_tiles != nullptr) {
-    for (int coord = 0; coord < this->rows * this->cols; coord++) {
-      std::vector<Tile>* vec = this->bg_tiles[coord];
-      if (vec != nullptr) delete vec;
-    }
-
-    free(this->bg_tiles);
-    this->bg_tiles = nullptr;
-  }
-  if (this->fg_tiles != nullptr) {
-    for (int coord = 0; coord < this->rows * this->cols; coord++) {
-      std::vector<Tile>* vec = this->fg_tiles[coord];
-      if (vec != nullptr) delete vec;
-    }
-
-    free(this->fg_tiles);
-    this->fg_tiles = nullptr;
-  }
-  this->objects.clear();
+void Map::render_tile(int x, int y) const {
+  this->layers[kBackgroundLayer]->render_tile(
+      x, y, this->cols, this->tile_width, this->tile_height, this->tilesheets);
+  this->layers[kForegroundLayer]->render_tile(
+      x, y, this->cols, this->tile_width, this->tile_height, this->tilesheets);
 }
 
-void Map::render_tile(int x, int y) {
-  Renderer* renderer = Renderer::instance;
-
-  SDL_FRect dst_rect;
-  dst_rect.x = float(this->tile_width * x);
-  dst_rect.y = float(this->tile_width * y);
-  dst_rect.w = float(this->tile_width);
-  dst_rect.h = float(this->tile_height);
-
-  renderer->draw_rect(
-      this->bg, &dst_rect,
-      Colour(uint8_t(this->bg_r), uint8_t(this->bg_g), uint8_t(this->bg_b)),
-      SDL_BLENDMODE_NONE);
-
-  // render bg tiles
-  std::vector<Tile>* vec = this->bg_tiles[(y * this->cols) + x];
-  if (vec != nullptr) {
-    SDL_FRect src_rect;
-    src_rect.w = float(this->tile_width);
-    src_rect.h = float(this->tile_height);
-
-    // render all tiles in order
-    for (auto tile : *vec) {
-      src_rect.x = float(this->tile_width * tile.x);
-      src_rect.y = float(this->tile_height * tile.y);
-      renderer->draw_texture(this->bg,
-                             this->tilesheets[tile.tilesheet]->texture,
-                             &src_rect, &dst_rect);
-    }
+void Map::make_map_rect(int x, int y, int w, int h, SDL_FRect* src_rect,
+                        SDL_FRect* dst_rect) {
+  if (x < 0) {
+    dst_rect->x = float(-1 * x);
+    dst_rect->w = float(THOOM_MIN(THOOM_SCREEN_WIDTH, w));
+    src_rect->x = 0.0f;
+  } else {
+    dst_rect->x = 0.0f;
+    dst_rect->w = float(THOOM_MIN(THOOM_SCREEN_WIDTH, w - x));
+    src_rect->x = float(x);
   }
 
-  renderer->draw_rect(this->fg, &dst_rect, kMask, SDL_BLENDMODE_NONE);
-
-  // render fg tiles
-  vec = this->fg_tiles[(y * this->cols) + x];
-  if (vec != nullptr) {
-    SDL_FRect src_rect;
-    src_rect.w = float(this->tile_width);
-    src_rect.h = float(this->tile_height);
-
-    // render all tiles in order
-    for (auto tile : *vec) {
-      src_rect.x = float(this->tile_width * tile.x);
-      src_rect.y = float(this->tile_height * tile.y);
-      renderer->draw_texture(this->fg,
-                             this->tilesheets[tile.tilesheet]->texture,
-                             &src_rect, &dst_rect);
-    }
+  if (y < 0) {
+    dst_rect->y = float(-1 * y);
+    dst_rect->h = float(THOOM_MIN(THOOM_SCREEN_HEIGHT, h));
+    src_rect->y = 0.0f;
+  } else {
+    dst_rect->y = 0.0f;
+    dst_rect->h = float(THOOM_MIN(THOOM_SCREEN_HEIGHT, h - y));
+    src_rect->y = float(y);
   }
+
+  src_rect->w = dst_rect->w;
+  src_rect->h = dst_rect->h;
 }
 
 };  // namespace thoom
