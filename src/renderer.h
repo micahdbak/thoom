@@ -8,6 +8,7 @@
 #include "colour.h"
 #include "font.h"
 #include "macros.h"
+#include "map.h"
 #include "sprite.h"
 
 namespace thoom {
@@ -16,24 +17,18 @@ class Renderer {
  public:
   inline static Renderer* instance = nullptr;
 
-  static void init(const char* title, int screen_width, int screen_height);
+  static void init();
   static void shutdown();
 
-  Renderer(const char* title, int screen_width, int screen_height);
+  Renderer() = default;
   ~Renderer();
   DISALLOW_COPY_AND_MOVE(Renderer);
 
-  void set_window_title(const char* title);
-  void update_screen_scale();
-  void clear_screen(Colour colour);
-  void save_screenshot(const char* file_path);
-  void present(Colour letterbox_colour);
+  void set_view(int x, int y);
+  void reset_view();
+  float world_to_screen_x(float x) const;
+  float world_to_screen_y(float y) const;
 
-  SDL_Texture* create_texture(int w, int h, SDL_PixelFormat format,
-                              SDL_ScaleMode scale_mode);
-  SDL_Texture* create_texture_from_surface(SDL_Surface* surface,
-                                           SDL_ScaleMode scale_mode);
-  SDL_Surface* read_pixels(SDL_Texture* texture);
   void clear(SDL_Texture* texture, Colour colour);
 
   void draw_rect(SDL_Texture* dst, SDL_FRect* rect, Colour colour,
@@ -48,19 +43,19 @@ class Renderer {
   void draw_geometry(SDL_Texture* dst, SDL_Texture* texture,
                      const SDL_Vertex* vertices, int num_vertices,
                      const int* indices, int num_indices);
-  void draw_text(SDL_Texture* dst, Font* font, std::string text, int x, int y,
+  void draw_text(SDL_Texture* dst, int font, std::string text, int x, int y,
                  int w, Colour bg);
-  void draw_sprites(std::vector<SpriteRender>& sprites, SDL_FRect* viewport,
-                    int corner_x, int corner_y);
+  void draw_map_background(Map* map);
+  void draw_map_foreground(Map* map);
+  void push_sprite(const std::string& tex_id, SDL_Texture* texture,
+                   SDL_FRect* src_rect, SDL_FRect* dst_rect, int depth_offset);
+  void draw_sprites();
 
-  // TODO(micahdbak): make private; expose intent-specific methods instead
-  SDL_Renderer* sdl_renderer;
-  SDL_Texture* screen;
+  std::vector<Font*> fonts;
+  std::vector<SpriteRender> sprites;
 
  private:
-  SDL_Window* sdl_window;
-  SDL_FRect screen_rect;
-  int screen_width, screen_height;
+  int view_x = 0, view_y = 0;
 };
 
 };  // namespace thoom

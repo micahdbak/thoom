@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "renderer.h"
+#include "window.h"
 
 namespace thoom {
 
@@ -18,7 +19,7 @@ Tilesheet::Tilesheet(const char* tilesheet_path, int tile_width,
   this->cols = tilesheet_surface->w / tile_width;
   this->rows = tilesheet_surface->h / tile_height;
 
-  this->texture = Renderer::instance->create_texture_from_surface(
+  this->texture = thoom::Window::instance->create_texture_from_surface(
       tilesheet_surface, SDL_SCALEMODE_LINEAR);
   SDL_DestroySurface(tilesheet_surface);
   tilesheet_surface = nullptr;
