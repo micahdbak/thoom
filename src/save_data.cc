@@ -81,8 +81,10 @@ void SaveData::write_file(int file_i) {
 
   if (this->geti(GAME_DONE)) {
     line = "(Game Complete.)\n";
+  } else if (game->map != nullptr) {
+    line = game->map->title + ", " + game->map->description + "\n";
   } else {
-    line = game->map_title + ", " + game->map_description + "\n";
+    line = "No map loaded\n";
   }
 
   hash = _djb2_hash(hash, line.c_str());

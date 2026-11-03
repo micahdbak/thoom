@@ -13,7 +13,6 @@
 #include "net_agent.h"
 #include "renderer.h"
 #include "save_data.h"
-#include "utils.h"
 
 namespace thoom {
 
@@ -75,22 +74,8 @@ void Game::unload() {
   }
 
   this->deleting_objects = false;
-  this->current_map = "";
-
-  if (this->bg != nullptr) {
-    SDL_DestroyTexture(this->bg);
-    this->bg = nullptr;
-  }
-
-  if (this->fg != nullptr) {
-    SDL_DestroyTexture(this->fg);
-    this->fg = nullptr;
-  }
-
-  if (this->collision != nullptr) {
-    free(this->collision);
-    this->collision = nullptr;
-  }
+  delete this->map;
+  this->map = nullptr;
 }
 
 void Game::load_map(const char* map_path) {
@@ -100,46 +85,21 @@ void Game::load_map(const char* map_path) {
     net_agent->send_message(MSG_MAP + std::string(map_path) + '\n');
   }
 
-  Map map;
-  map.read(map_path);
+  delete this->map;
+  this->map = new Map(map_path);
 
-  this->map_title = map.title;
-  this->map_description = map.description;
-
-  this->bg = map.bg;
-  this->fg = map.fg;
-  this->collision = map.collision;
-  this->tile_width = map.tile_width;
-  this->tile_height = map.tile_height;
-  this->cols = map.cols;
-  this->rows = map.rows;
-  this->bg_r = map.bg_r;
-  this->bg_g = map.bg_g;
-  this->bg_b = map.bg_b;
-
-  if (this->ambience != map.ambience) {
-    load_audio(map.ambience);
-    loop_audio(map.ambience);
+  if (this->ambience != this->map->ambience) {
+    load_audio(this->map->ambience);
+    loop_audio(this->map->ambience);
   }
 
-  this->ambience = map.ambience;
+  this->ambience = this->map->ambience;
 
-  // assemble appropriately sized quads for each predefined map collider
-  for (int i = 0; i < n_MapColliders; i++) {
-    // a quad has four vertices
-    for (int j = 0; j < 4; j++) {
-      this->colliders[i].vertex[j].x =
-          float(map.tile_width) * MapColliders[i][j].x;
-      this->colliders[i].vertex[j].y =
-          float(map.tile_height) * MapColliders[i][j].y;
-    }
-  }
-
-  this->current_map = map_path;
   this->creating_objects = true;
 
   if (this->create_objects || std::string(map_path) == "maps/init") {
-    for (auto obj : map.objects) this->create_object(obj.first, obj.second);
+    for (auto obj : this->map->objects)
+      this->create_object(obj.first, obj.second);
 
     while (!this->new_objects.empty()) {
       auto obj = this->new_objects.front();
@@ -150,11 +110,9 @@ void Game::load_map(const char* map_path) {
 
   this->creating_objects = false;
 
-  map.clear();
-
   if (save.geti(LOAD_SAVE) == 1) save.data.erase(LOAD_SAVE);
 
-  save.data[LOAD_MAP] = this->current_map;
+  save.data[LOAD_MAP] = this->map->path;
 
   this->corner_x = 0;
   this->corner_y = 0;
@@ -209,12 +167,12 @@ void Game::step() {
   Renderer* renderer = Renderer::instance;
 
   // create new map
-  if (this->map != "") {
+  if (this->next_map != "") {
     renderer->clear_screen(kBlack);
 
     this->unload();
-    this->load_map(this->map.c_str());
-    this->map = "";
+    this->load_map(this->next_map.c_str());
+    this->next_map = "";
     return;
   }
 
@@ -265,17 +223,25 @@ void Game::step() {
     this->last_obj->step();
   }
 
-  Colour bg{this->bg_r, this->bg_g, this->bg_b};
+  Colour bg = kBlack;
+
+  if (this->map != nullptr) {
+    bg = Colour{uint8_t(this->map->bg_r), uint8_t(this->map->bg_g),
+                uint8_t(this->map->bg_b)};
+  }
+
   renderer->clear_screen(bg);
 
   // render background
   SDL_FRect map_src = SDL_FRect{0, 0, THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT};
   SDL_FRect map_dst = SDL_FRect{0, 0, THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT};
 
-  if (this->bg != nullptr) {
-    make_map_rect(this->corner_x, this->corner_y, this->bg->w, this->bg->h,
-                  &map_src, &map_dst);
-    renderer->draw_texture(renderer->screen, this->bg, &map_src, &map_dst);
+  if (this->map != nullptr &&
+      this->map->layers[Map::kBackgroundLayer]->texture != nullptr) {
+    SDL_Texture* bg_texture = this->map->layers[Map::kBackgroundLayer]->texture;
+    Map::make_map_rect(this->corner_x, this->corner_y, bg_texture->w,
+                       bg_texture->h, &map_src, &map_dst);
+    renderer->draw_texture(renderer->screen, bg_texture, &map_src, &map_dst);
   }
 
   renderer->draw_sprites(this->sprites, &map_src, this->corner_x,
@@ -284,8 +250,12 @@ void Game::step() {
   this->sprites.clear();  // clear sprites; next frame will repopulate
 
   // render foreground
-  if (this->fg != nullptr)
-    renderer->draw_texture(renderer->screen, this->fg, &map_src, &map_dst);
+  if (this->map != nullptr &&
+      this->map->layers[Map::kForegroundLayer]->texture != nullptr) {
+    renderer->draw_texture(renderer->screen,
+                           this->map->layers[Map::kForegroundLayer]->texture,
+                           &map_src, &map_dst);
+  }
 
   if (local_controller.c == 'p' || captured_controller.c == 'p') {
     local_controller.c = NO_CHAR;
@@ -316,133 +286,6 @@ void Game::push_sprite(const std::string& tex_id, SDL_Texture* texture,
   auto it =
       std::lower_bound(this->sprites.begin(), this->sprites.end(), sprite);
   this->sprites.insert(it, sprite);
-}
-
-// below `_sign` and `_point_in_triangle` functions from:
-// https://stackoverflow.com/questions/2049582/how-to-determine-if-a-point-is-in-a-2d-triangle
-
-static float _sign(SDL_FPoint p1, SDL_FPoint p2, SDL_FPoint p3) {
-  return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
-}
-
-static bool _point_in_triangle(SDL_FPoint pt, SDL_FPoint v1, SDL_FPoint v2,
-                               SDL_FPoint v3) {
-  float d1, d2, d3;
-  bool has_neg, has_pos;
-
-  d1 = _sign(pt, v1, v2);
-  d2 = _sign(pt, v2, v3);
-  d3 = _sign(pt, v3, v1);
-
-  has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
-  has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
-
-  return !(has_neg && has_pos);
-}
-
-bool Game::point_in_collider(float x, float y) const {
-  // no collision
-  if (this->collision == nullptr) return false;
-
-  // flooring is intentional
-  int _x = int(x) / this->tile_width;
-  int _y = int(y) / this->tile_height;
-
-  // out of map is automatic collision
-  if (x < 0.0f || y < 0.0f || _x >= this->cols || _y >= this->rows) return true;
-
-  int coord = (_y * this->cols) + _x;
-
-  // no collider at point or invalid collider
-  if (this->collision[coord] < 0 || this->collision[coord] >= n_MapColliders)
-    return false;
-
-  Quad quad = this->colliders[this->collision[coord]];
-  SDL_FPoint point;
-  point.x = x - float(_x * this->tile_width);
-  point.y = y - float(_y * this->tile_width);
-
-  // return true if the point lies in either triangles making up the collider's
-  // quad
-  return _point_in_triangle(point, quad.vertex[0], quad.vertex[1],
-                            quad.vertex[2]) ||
-         _point_in_triangle(point, quad.vertex[2], quad.vertex[3],
-                            quad.vertex[0]);
-}
-
-bool Game::in_sight(int x0, int y0, int x1, int y1, int* next_x,
-                    int* next_y) const {
-  x0 = x0 / this->tile_width;
-  y0 = y0 / this->tile_width;
-  x1 = x1 / this->tile_width;
-  y1 = y1 / this->tile_height;
-
-  int dx = abs(x1 - x0);
-  int sx = x0 < x1 ? 1 : -1;
-  int dy = -abs(y1 - y0);
-  int sy = y0 < y1 ? 1 : -1;
-  int error = dx + dy;
-  bool next_set = false;
-
-  while (true) {
-    // return false if there is a collider in the way
-    if (this->collision[(y0 * this->cols) + x0] >= 0) return false;
-
-    int e2 = 2 * error;
-    if (e2 >= dy) {
-      if (x0 == x1) break;
-      error = error + dy;
-      x0 = x0 + sx;
-    }
-    if (e2 <= dx) {
-      if (y0 == y1) break;
-      error = error + dx;
-      y0 = y0 + sy;
-    }
-
-    if (!next_set && next_x != NULL && next_y != NULL) {
-      *next_x = x0 * this->tile_width;
-      *next_y = y0 * this->tile_height;
-      next_set = true;
-    }
-  }
-
-  if (!next_set && next_x != NULL && next_y != NULL) {
-    *next_x = x0 * this->tile_width;
-    *next_y = y0 * this->tile_height;
-    next_set = true;
-  }
-
-  // no colliders in the way; target is in sight
-  return true;
-}
-
-void Game::random_target(int x, int y, int* next_x, int* next_y) const {
-  if (next_x == NULL || next_y == NULL) return;  // legit wtf if this happens
-
-  x /= this->tile_width;
-  y /= this->tile_height;
-
-  std::vector<std::pair<int, int>> candidates;
-
-  int start_x = THOOM_CLAMP(x - 1, 0, this->cols - 1);
-  int start_y = THOOM_CLAMP(y - 1, 0, this->rows - 1);
-  int end_x = THOOM_CLAMP(x + 1, 0, this->cols - 1);
-  int end_y = THOOM_CLAMP(y + 1, 0, this->rows - 1);
-
-  for (int _x = start_x; _x <= end_x; _x++) {
-    for (int _y = start_y; _y <= end_y; _y++) {
-      if (_x == x && _y == y) continue;
-
-      if (this->collision[(_y * this->cols) + _x] < 0) {
-        candidates.push_back({_x, _y});
-      }
-    }
-  }
-
-  std::pair<int, int> target = candidates[SDL_rand(candidates.size())];
-  *next_x = target.first * this->tile_width;
-  *next_y = target.second * this->tile_height;
 }
 
 };  // namespace thoom

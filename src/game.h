@@ -42,12 +42,6 @@ class Game {
   void push_sprite(const std::string& tex_id, SDL_Texture* texture,
                    SDL_FRect* src_rect, SDL_FRect* dst_rect, int depth_offset);
 
-  bool point_in_collider(float x, float y) const;
-  bool in_sight(int x0, int y0, int x1, int y1, int* next_x,
-                int* next_y) const;  // true if no colliders in way
-  void random_target(int x, int y, int* next_x, int* next_y)
-      const;  // chooses a random tile to move to, with no collider
-
   // defined per game (e.g., map_editor.cc, init.cc)
 
   void init();
@@ -74,12 +68,9 @@ class Game {
   std::vector<Font*> fonts;
 
   int corner_x = 0, corner_y = 0;  // set in Game::step
-  int tile_width = 32, tile_height = 32, cols = 1, rows = 1;
-  int* collision = nullptr;
 
-  std::string map = "";                              // set this to load a map
-  std::string current_map = "";                      // readonly
-  std::string map_title = "", map_description = "";  // readonly
+  std::string next_map = "";  // set this to load a map
+  Map* map = nullptr;
 
   bool create_objects = true;  // disable for feta launcher
   bool delete_object = false;  // set to true from an object's step to delete it
@@ -96,8 +87,6 @@ class Game {
   std::vector<SpriteRender> push_sprites;
 
   NetworkAgent::State net_state = NetworkAgent::State::NO_CONNECTION;
-
-  Uint8 bg_r = 0, bg_g = 0, bg_b = 0;
 
   struct AudioMsg {
     std::string wav_path;
@@ -117,10 +106,6 @@ class Game {
   };
 
   void load_map(const char* map_path);
-
-  // map things
-  SDL_Texture *bg = nullptr, *fg = nullptr;
-  Quad colliders[n_MapColliders];
 
   // object things
   std::vector<Object*> objects;
