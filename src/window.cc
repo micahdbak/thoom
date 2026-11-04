@@ -152,61 +152,6 @@ void Window::present(Colour letterbox_colour) {
   SDL_RenderPresent(this->sdl_renderer);
 }
 
-SDL_Texture* Window::create_texture(int w, int h, SDL_PixelFormat format,
-                                    SDL_ScaleMode scale_mode) {
-  SDL_Texture* texture = SDL_CreateTexture(this->sdl_renderer, format,
-                                           SDL_TEXTUREACCESS_TARGET, w, h);
-
-  if (texture == nullptr) {
-    std::cerr << "Window::create_texture error: " << SDL_GetError()
-              << std::endl;
-    return nullptr;
-  }
-
-  SDL_SetTextureScaleMode(texture, scale_mode);
-
-  return texture;
-}
-
-SDL_Texture* Window::create_texture_from_surface(SDL_Surface* surface,
-                                                 SDL_ScaleMode scale_mode) {
-  SDL_Texture* texture =
-      SDL_CreateTextureFromSurface(this->sdl_renderer, surface);
-
-  if (texture == nullptr) {
-    std::cerr << "Window::create_texture_from_surface error: " << SDL_GetError()
-              << std::endl;
-    return nullptr;
-  }
-
-  SDL_SetTextureScaleMode(texture, scale_mode);
-
-  return texture;
-}
-
-SDL_Texture* Window::create_texture_from_bmp_memory(const void* data,
-                                                    size_t size,
-                                                    SDL_ScaleMode scale_mode) {
-  SDL_IOStream* io = SDL_IOFromConstMem(data, size);
-  if (io == nullptr) {
-    std::cerr << "Window::create_texture_from_bmp_memory error: "
-              << SDL_GetError() << std::endl;
-    return nullptr;
-  }
-
-  SDL_Surface* surface = SDL_LoadBMP_IO(io, true);
-  if (surface == nullptr) {
-    std::cerr << "Window::create_texture_from_bmp_memory error: "
-              << SDL_GetError() << std::endl;
-    return nullptr;
-  }
-
-  SDL_Texture* texture = this->create_texture_from_surface(surface, scale_mode);
-  SDL_DestroySurface(surface);
-
-  return texture;
-}
-
 SDL_Surface* Window::read_pixels(SDL_Texture* texture) {
   if (texture == nullptr) {
     // TODO(micahdbak): warning

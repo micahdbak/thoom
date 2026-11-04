@@ -6,7 +6,6 @@
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_timer.h"
 #include "audio.h"
-#include "bmp_texture.h"
 #include "controller.h"
 #include "net_agent.h"
 #include "renderer.h"
@@ -17,11 +16,7 @@ namespace thoom {
 
 std::unordered_map<uint64_t, std::string> debug_obj_ptrs;
 
-Game::Game() {
-  this->ticks = SDL_GetTicks();
-
-  load_render_functions();  // bmp_texture.h
-}
+Game::Game() { this->ticks = SDL_GetTicks(); }
 
 Game::~Game() {
   this->unload();
@@ -44,8 +39,6 @@ Game::~Game() {
   // free factories
   for (auto pair : this->factories) delete pair.second;
   this->factories.clear();
-
-  free_textures();  // bmp_texture.h
 }
 
 void Game::unload() {

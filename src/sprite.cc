@@ -2,14 +2,14 @@
 
 #include <iostream>
 
-#include "bmp_texture.h"
 #include "game.h"
+#include "texture.h"
 
 namespace thoom {
 
 Sprite::Sprite(const char* bmp_path, int frame_w, int frame_h, int interval_ms)
     : frame_w(frame_w), frame_h(frame_h), interval_ms(interval_ms) {
-  this->texture = load_bmp_texture(bmp_path);
+  this->texture = Texture::instance->load(bmp_path);
   this->sheet_w = this->texture->w;
   this->sheet_h = this->texture->h;
 

@@ -39,7 +39,7 @@ add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
 add_library(thoom
   src/audio.cc
-  src/bmp_texture.cc
+  src/texture.cc
   src/collider.cc
   src/controller.cc
   src/font.cc
