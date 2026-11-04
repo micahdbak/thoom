@@ -54,14 +54,6 @@ class Game {
 
   NetworkAgent::State net_state = NetworkAgent::State::NO_CONNECTION;
 
-  struct AudioMsg {
-    std::string wav_path;
-    float gain, x, y;
-  };
-
-  std::vector<AudioMsg> audio;
-  int volume = 100, music_volume = 100;
-
  private:
   void load_map(const char* map_path);
 
@@ -69,8 +61,6 @@ class Game {
   std::queue<std::pair<std::string, std::string>> new_objects;
   std::unordered_map<std::string, ObjectFactory*> factories;
   Object *first_obj = nullptr, *last_obj = nullptr;
-
-  std::string ambience;
 };
 
 extern Game* game;

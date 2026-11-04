@@ -38,7 +38,7 @@ add_subdirectory(deps/libdatachannel EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
 add_library(thoom
-  src/audio_playback.cc
+  src/audio.cc
   src/bmp_texture.cc
   src/collider.cc
   src/controller.cc
