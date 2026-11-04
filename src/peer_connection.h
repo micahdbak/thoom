@@ -5,12 +5,12 @@
 
 namespace thoom {
 
-class NetworkConnection {
+class PeerConnection {
  public:
   enum State { DEAD = 0, ERROR, COLLECTING, ALIVE };
 
-  NetworkConnection() = default;
-  ~NetworkConnection() = default;
+  PeerConnection() = default;
+  ~PeerConnection() = default;
 
   void start_collecting(bool offerer);
   void kill();

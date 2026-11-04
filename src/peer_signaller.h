@@ -5,12 +5,12 @@
 
 namespace thoom {
 
-class NetworkSignaller {
+class PeerSignaller {
  public:
   enum State { NOT_CONNECTED = 0, CONNECTING, CONNECTED };
 
-  NetworkSignaller() = default;
-  ~NetworkSignaller() = default;
+  PeerSignaller() = default;
+  ~PeerSignaller() = default;
 
   void connect(const std::string& code, bool offerer);
   void disconnect();

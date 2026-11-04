@@ -47,9 +47,9 @@ add_library(thoom
   src/game.cc
   src/map.cc
   src/map_layer.cc
-  src/net_agent.cc
-  src/net_connection.cc
-  src/net_signaller.cc
+  src/peer.cc
+  src/peer_connection.cc
+  src/peer_signaller.cc
   src/renderer.cc
   src/save_data.cc
   src/sprite.cc
