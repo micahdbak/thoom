@@ -26,7 +26,7 @@ MapLayer::MapLayer(int cols, int rows, int tile_width, int tile_height,
     exit(1);
   }
 
-  thoom::Renderer::instance->clear(this->texture, clear_colour);
+  Renderer::instance->clear(this->texture, clear_colour);
 
   this->clear_colour = clear_colour;
   this->count = cols * rows;

@@ -63,7 +63,7 @@ void Game::unload() {
 void Game::step() {
   // create new map
   if (this->next_map != "") {
-    thoom::Window::instance->clear_screen(kBlack);
+    Window::instance->clear_screen(kBlack);
 
     this->unload();
     this->load_map(this->next_map.c_str());
@@ -124,7 +124,7 @@ void Game::step() {
                 uint8_t(this->map->bg_b)};
   }
 
-  thoom::Window::instance->clear_screen(bg);
+  Window::instance->clear_screen(bg);
   Renderer::instance->draw_map_background(this->map);
   Renderer::instance->draw_sprites();
   Renderer::instance->draw_map_foreground(this->map);
