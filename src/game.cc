@@ -5,7 +5,7 @@
 #include "SDL3/SDL_blendmode.h"
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_timer.h"
-#include "audio_playback.h"
+#include "audio.h"
 #include "bmp_texture.h"
 #include "controller.h"
 #include "net_agent.h"
@@ -21,8 +21,6 @@ Game::Game() {
   this->ticks = SDL_GetTicks();
 
   load_render_functions();  // bmp_texture.h
-
-  init_playback();  // audio_stream.h
 }
 
 Game::~Game() {
@@ -48,8 +46,6 @@ Game::~Game() {
   this->factories.clear();
 
   free_textures();  // bmp_texture.h
-
-  free_playback();  // audio_stream.h
 }
 
 void Game::unload() {
@@ -72,7 +68,6 @@ void Game::unload() {
 }
 
 void Game::step() {
-
   // create new map
   if (this->next_map != "") {
     thoom::Window::instance->clear_screen(kBlack);
@@ -83,8 +78,7 @@ void Game::step() {
     return;
   }
 
-  this->audio.clear();
-  ambience_step();
+  Audio::instance->step();
 
   // get ticks and calculate delta
   Uint64 new_ticks = SDL_GetTicks();
@@ -213,12 +207,7 @@ void Game::load_map(const char* map_path) {
   delete this->map;
   this->map = new Map(map_path);
 
-  if (this->ambience != this->map->ambience) {
-    load_audio(this->map->ambience);
-    loop_audio(this->map->ambience);
-  }
-
-  this->ambience = this->map->ambience;
+  Audio::instance->loop(this->map->ambience);
 
   this->creating_objects = true;
 
