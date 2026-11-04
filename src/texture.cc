@@ -41,18 +41,18 @@ void Texture::register_render_function(const std::string& name,
   this->render_functions[name] = func;
 }
 
-SDL_Texture* Texture::load(const std::string& bmp_path) {
-  if (this->textures.find(bmp_path) != this->textures.end()) {
-    return this->textures[bmp_path];
+SDL_Texture* Texture::load(const std::string& path) {
+  if (this->textures.find(path) != this->textures.end()) {
+    return this->textures[path];
   }
 
   char buff[1024];
-  sscanf(bmp_path.c_str(), "%1023[^/]", buff);
+  sscanf(path.c_str(), "%1023[^/]", buff);
   buff[1023] = '\0';
 
   if (std::string(buff) == "render") {
     size_t offset = strlen(buff) + 1;  // + 1 for '/'
-    sscanf(bmp_path.c_str() + offset, "%1023[^/]", buff);
+    sscanf(path.c_str() + offset, "%1023[^/]", buff);
     buff[1023] = '\0';
 
     if (this->render_functions.find(buff) == this->render_functions.end()) {
@@ -63,17 +63,17 @@ SDL_Texture* Texture::load(const std::string& bmp_path) {
 
     char args[1024];
     offset += strlen(buff) + 1;
-    sscanf(bmp_path.c_str() + offset, "%1023[^/]", args);
+    sscanf(path.c_str() + offset, "%1023[^/]", args);
     args[1023] = '\0';
 
     SDL_Texture* texture = this->render_functions[buff](args);
-    this->textures[bmp_path] = texture;
+    this->textures[path] = texture;
     return texture;
   }
 
-  SDL_Surface* surface = SDL_LoadBMP(bmp_path.c_str());
+  SDL_Surface* surface = SDL_LoadBMP(path.c_str());
   if (surface == nullptr) {
-    std::cerr << "SDL_LoadBMP error: " << bmp_path << " does not exist."
+    std::cerr << "SDL_LoadBMP error: " << path << " does not exist."
               << std::endl;
     exit(1);
   }
@@ -81,7 +81,7 @@ SDL_Texture* Texture::load(const std::string& bmp_path) {
   SDL_Texture* texture =
       this->create_texture_from_surface(surface, SDL_SCALEMODE_NEAREST);
   SDL_DestroySurface(surface);
-  this->textures[bmp_path] = texture;
+  this->textures[path] = texture;
   return texture;
 }
 

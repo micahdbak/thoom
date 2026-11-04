@@ -24,7 +24,7 @@ class Texture {
   DISALLOW_COPY_AND_MOVE(Texture);
 
   void register_render_function(const std::string& name, RenderFunction func);
-  SDL_Texture* load(const std::string& bmp_path);
+  SDL_Texture* load(const std::string& path);
 
   SDL_Texture* create_texture(int w, int h, SDL_PixelFormat format,
                               SDL_ScaleMode scale_mode);
@@ -35,6 +35,7 @@ class Texture {
 
  private:
   std::unordered_map<std::string, RenderFunction> render_functions;
+
   std::unordered_map<std::string, SDL_Texture*> textures;
 };
 
