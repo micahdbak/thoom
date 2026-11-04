@@ -3,7 +3,7 @@
 #include <iostream>
 
 #include "renderer.h"
-#include "window.h"
+#include "texture.h"
 
 namespace thoom {
 
@@ -74,7 +74,7 @@ Font::Font(const char* font_path, int w, int h, int default_w,
     exit(1);
   }
 
-  this->texture = thoom::Window::instance->create_texture_from_surface(
+  this->texture = Texture::instance->create_texture_from_surface(
       font_surface, SDL_SCALEMODE_NEAREST);
   SDL_DestroySurface(font_surface);
 

@@ -2,8 +2,6 @@
 
 #include <SDL3/SDL.h>
 
-#include <cstddef>
-
 #include "colour.h"
 #include "macros.h"
 
@@ -26,12 +24,6 @@ class Window {
   void save_screenshot(const char* file_path);
   void present(Colour letterbox_colour);
 
-  SDL_Texture* create_texture(int w, int h, SDL_PixelFormat format,
-                              SDL_ScaleMode scale_mode);
-  SDL_Texture* create_texture_from_surface(SDL_Surface* surface,
-                                           SDL_ScaleMode scale_mode);
-  SDL_Texture* create_texture_from_bmp_memory(const void* data, size_t size,
-                                              SDL_ScaleMode scale_mode);
   SDL_Surface* read_pixels(SDL_Texture* texture);
 
   SDL_Window* sdl_window = nullptr;

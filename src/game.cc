@@ -6,7 +6,6 @@
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_timer.h"
 #include "audio.h"
-#include "bmp_texture.h"
 #include "controller.h"
 #include "net_agent.h"
 #include "renderer.h"
@@ -17,11 +16,7 @@ namespace thoom {
 
 std::unordered_map<uint64_t, std::string> debug_obj_ptrs;
 
-Game::Game() {
-  this->ticks = SDL_GetTicks();
-
-  load_render_functions();  // bmp_texture.h
-}
+Game::Game() { this->ticks = SDL_GetTicks(); }
 
 Game::~Game() {
   this->unload();
@@ -44,8 +39,6 @@ Game::~Game() {
   // free factories
   for (auto pair : this->factories) delete pair.second;
   this->factories.clear();
-
-  free_textures();  // bmp_texture.h
 }
 
 void Game::unload() {
@@ -70,7 +63,7 @@ void Game::unload() {
 void Game::step() {
   // create new map
   if (this->next_map != "") {
-    thoom::Window::instance->clear_screen(kBlack);
+    Window::instance->clear_screen(kBlack);
 
     this->unload();
     this->load_map(this->next_map.c_str());
@@ -131,7 +124,7 @@ void Game::step() {
                 uint8_t(this->map->bg_b)};
   }
 
-  thoom::Window::instance->clear_screen(bg);
+  Window::instance->clear_screen(bg);
   Renderer::instance->draw_map_background(this->map);
   Renderer::instance->draw_sprites();
   Renderer::instance->draw_map_foreground(this->map);
