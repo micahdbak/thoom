@@ -7,7 +7,6 @@
 #include "SDL3/SDL_timer.h"
 #include "audio.h"
 #include "controller.h"
-#include "net_agent.h"
 #include "renderer.h"
 #include "save_data.h"
 #include "window.h"
@@ -29,11 +28,6 @@ Game::~Game() {
   if (this->last_obj != nullptr) {
     delete this->last_obj;
     this->last_obj = nullptr;
-  }
-
-  if (net_agent != nullptr) {
-    delete net_agent;
-    net_agent = nullptr;
   }
 
   // free factories
@@ -77,8 +71,6 @@ void Game::step() {
   Uint64 new_ticks = SDL_GetTicks();
   this->delta = float(new_ticks - this->ticks) / 1000.0f;
   this->ticks = new_ticks;
-
-  this->net_state = net_agent->get_state();
 
   if (this->first_obj != nullptr) {
     this->first_obj->step();
@@ -191,12 +183,6 @@ Object* Game::get_object(int id) {
 }
 
 void Game::load_map(const char* map_path) {
-  // if cheddar and connected, notify feta that we are changing maps
-  if (this->create_objects &&
-      this->net_state == NetworkAgent::State::CONNECTED) {
-    net_agent->send_message(MSG_MAP + std::string(map_path) + '\n');
-  }
-
   delete this->map;
   this->map = new Map(map_path);
 

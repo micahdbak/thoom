@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "map.h"
-#include "net_agent.h"
 #include "object.h"
 
 namespace thoom {
@@ -51,8 +50,6 @@ class Game {
   bool delete_object = false;
   bool creating_objects = false;
   bool deleting_objects = false;
-
-  NetworkAgent::State net_state = NetworkAgent::State::NO_CONNECTION;
 
  private:
   void load_map(const char* map_path);
