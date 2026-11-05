@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include "game.h"
+#include "scene.h"
 #include "texture.h"
 
 namespace thoom {
@@ -19,7 +19,7 @@ Sprite::Sprite(const char* bmp_path, int frame_w, int frame_h, int interval_ms)
   this->frame.h = float(frame_h);
 
   this->frame_i = 0;
-  this->frame_last_set = game->ticks;
+  this->frame_last_set = Scene::instance->ticks;
 
   this->tex_id = bmp_path;
 }
@@ -34,13 +34,13 @@ void Sprite::set_animation(int animation) {
 }
 
 bool Sprite::update_frame() {
-  if (game->ticks - this->frame_last_set > this->interval_ms) {
+  if (Scene::instance->ticks - this->frame_last_set > this->interval_ms) {
     this->frame_i++;
     if (this->frame_i * this->frame_w >= this->sheet_w) {
       this->frame_i = 0;
     }
     this->frame.x = float(this->frame_i * this->frame_w) + 0.01f;
-    this->frame_last_set = game->ticks;
+    this->frame_last_set = Scene::instance->ticks;
 
     return true;
   }
@@ -51,7 +51,7 @@ bool Sprite::update_frame() {
 void Sprite::set_frame(int frame_i) {
   this->frame_i = frame_i;
   this->frame.x = float(this->frame_i * this->frame_w) + 0.1f;
-  this->frame_last_set = game->ticks;
+  this->frame_last_set = Scene::instance->ticks;
 }
 
 };  // namespace thoom

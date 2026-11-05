@@ -44,7 +44,7 @@ add_library(thoom
   src/controller.cc
   src/font.cc
 
-  src/game.cc
+  src/scene.cc
   src/map.cc
   src/map_layer.cc
   src/peer.cc

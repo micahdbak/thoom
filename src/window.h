@@ -7,6 +7,9 @@
 
 namespace thoom {
 
+#define THOOM_SCREEN_WIDTH 320
+#define THOOM_SCREEN_HEIGHT 240
+
 class Window {
  public:
   inline static Window* instance = nullptr;

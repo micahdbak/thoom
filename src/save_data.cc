@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <iostream>
 
-#include "game.h"
+#include "scene.h"
 
 namespace thoom {
 
@@ -81,8 +81,9 @@ void SaveData::write_file(int file_i) {
 
   if (this->geti(GAME_DONE)) {
     line = "(Game Complete.)\n";
-  } else if (game->map != nullptr) {
-    line = game->map->title + ", " + game->map->description + "\n";
+  } else if (Scene::instance != nullptr && Scene::instance->map != nullptr) {
+    line = Scene::instance->map->title + ", " +
+           Scene::instance->map->description + "\n";
   } else {
     line = "No map loaded\n";
   }
