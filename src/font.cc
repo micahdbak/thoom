@@ -1,8 +1,13 @@
 #include "font.h"
 
-#include <iostream>
+#include <SDL3/SDL.h>
 
-#include "renderer.h"
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "texture.h"
 
 namespace thoom {

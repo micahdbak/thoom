@@ -2,7 +2,10 @@
 
 #include <rtc/rtc.h>
 
+#include <cstdlib>
 #include <iostream>
+#include <string>
+#include <utility>
 
 #define NUM_ICE_SERVERS 2
 

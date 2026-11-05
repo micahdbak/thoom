@@ -1,7 +1,11 @@
 #include "input.h"
 
+#include <SDL3/SDL.h>
+
 #include <cstdlib>
 #include <iostream>
+
+#include "controller.h"
 
 namespace thoom {
 

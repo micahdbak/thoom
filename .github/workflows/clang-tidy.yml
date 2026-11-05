@@ -1,4 +1,4 @@
-name: include-what-you-use
+name: clang-tidy
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  include-what-you-use:
+  clang-tidy:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +44,15 @@ jobs:
             -DCMAKE_C_COMPILER=clang-18 \
             -DCMAKE_CXX_COMPILER=clang++-18
 
-      - name: Check includes
+      - name: Tidy sources
         env:
           CLANG_TIDY: clang-tidy-18
         run: scripts/tidy.sh
+
+      - name: Check for changes
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::clang-tidy changed the files above." \
+              "Run scripts/tidy.sh locally and commit the result."
+            exit 1
+          fi

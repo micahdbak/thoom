@@ -3,7 +3,9 @@
 #include <rtc/rtc.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
+#include <string>
 #include <thread>
 
 #define SIGNALLING_URL "wss://cheese.micahdb.com/sc/"

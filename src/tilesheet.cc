@@ -1,8 +1,9 @@
 #include "tilesheet.h"
 
+#include <SDL3/SDL.h>
+
 #include <iostream>
 
-#include "renderer.h"
 #include "texture.h"
 
 namespace thoom {

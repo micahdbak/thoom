@@ -1,10 +1,11 @@
 #include "window.h"
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
 
 #include <cstdlib>
 #include <iostream>
+
+#include "colour.h"
 
 #if defined(__SANITIZE_ADDRESS__) || \
     (defined(__has_feature) && __has_feature(address_sanitizer))
