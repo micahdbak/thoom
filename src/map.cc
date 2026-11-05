@@ -3,8 +3,8 @@
 #include <cstdlib>
 #include <iostream>
 
-#include "game.h"
 #include "macros.h"
+#include "window.h"
 
 namespace thoom {
 
@@ -49,8 +49,9 @@ Map::Map(const char* map_path) {
 
   if (feof(txt_file)) CORRUPTED_EXIT;
   fgets(buff, sizeof(buff), txt_file);
-  if (3 != sscanf(buff, "%d,%d,%d", &this->bg_r, &this->bg_g, &this->bg_b))
-    CORRUPTED_EXIT
+  int bg_r, bg_g, bg_b;
+  if (3 != sscanf(buff, "%d,%d,%d", &bg_r, &bg_g, &bg_b)) CORRUPTED_EXIT
+  this->background = Colour(uint8_t(bg_r), uint8_t(bg_g), uint8_t(bg_b));
 
   if (feof(txt_file)) CORRUPTED_EXIT;
   fgets(buff, sizeof(buff), txt_file);
@@ -58,9 +59,9 @@ Map::Map(const char* map_path) {
   this->ambience = buff;
 
   // allocate the necessary memory
-  this->layers[kBackgroundLayer] = new MapLayer(
-      this->cols, this->rows, this->tile_width, this->tile_height,
-      Colour(uint8_t(this->bg_r), uint8_t(this->bg_g), uint8_t(this->bg_b)));
+  this->layers[kBackgroundLayer] =
+      new MapLayer(this->cols, this->rows, this->tile_width, this->tile_height,
+                   this->background);
   this->layers[kForegroundLayer] = new MapLayer(
       this->cols, this->rows, this->tile_width, this->tile_height, kMask);
 
@@ -94,7 +95,10 @@ Map::Map(const char* map_path) {
     char buff3[1024];
     if (2 != sscanf(buff, "%1023s %1023[^\n]", buff2, buff3)) CORRUPTED_EXIT
     buff2[1023] = buff3[1023] = '\0';
-    this->objects.push_back(std::pair<std::string, std::string>(buff2, buff3));
+    ObjectRequest object;
+    object.id = buff2;
+    object.options = buff3;
+    this->objects.push_back(object);
   }
 
   fclose(txt_file);
@@ -160,9 +164,9 @@ Map::Map(int tile_width, int tile_height, int cols, int rows) {
   this->cols = cols;
   this->rows = rows;
 
-  this->layers[kBackgroundLayer] = new MapLayer(
-      this->cols, this->rows, this->tile_width, this->tile_height,
-      Colour(uint8_t(this->bg_r), uint8_t(this->bg_g), uint8_t(this->bg_b)));
+  this->layers[kBackgroundLayer] =
+      new MapLayer(this->cols, this->rows, this->tile_width, this->tile_height,
+                   this->background);
   this->layers[kForegroundLayer] = new MapLayer(
       this->cols, this->rows, this->tile_width, this->tile_height, kMask);
 
@@ -204,7 +208,8 @@ void Map::write(const char* map_path) const {
   fprintf(txt_file, "%s\n%s\n", this->title.c_str(), this->description.c_str());
   fprintf(txt_file, "%d,%d,%d,%d\n", this->tile_width, this->tile_height,
           this->cols, this->rows);
-  fprintf(txt_file, "%d,%d,%d\n", this->bg_r, this->bg_g, this->bg_b);
+  fprintf(txt_file, "%d,%d,%d\n", int(this->background.r),
+          int(this->background.g), int(this->background.b));
   fprintf(txt_file, "%s\n", this->ambience.c_str());
   fprintf(txt_file, "%d\n", int(this->tilesheets.size()));
 
@@ -216,8 +221,8 @@ void Map::write(const char* map_path) const {
   fprintf(txt_file, "%d\n", int(this->objects.size()));
 
   // write objects
-  for (auto& obj : this->objects) {
-    fprintf(txt_file, "%s %s\n", obj.first.c_str(), obj.second.c_str());
+  for (const ObjectRequest& object : this->objects) {
+    fprintf(txt_file, "%s %s\n", object.id.c_str(), object.options.c_str());
   }
 
   fclose(txt_file);

@@ -6,8 +6,10 @@
 #include <vector>
 
 #include "collider.h"
+#include "colour.h"
 #include "macros.h"
 #include "map_layer.h"
+#include "object.h"
 #include "tilesheet.h"
 
 namespace thoom {
@@ -34,12 +36,12 @@ class Map {
   std::string ambience = "";
 
   int tile_width = 32, tile_height = 32, cols = 1, rows = 1;
-  int bg_r = 0, bg_g = 0, bg_b = 0;
+  Colour background = kBlack;
 
   std::vector<Tilesheet*> tilesheets;
   MapLayer* layers[kLayerCount] = {};
 
-  std::vector<std::pair<std::string, std::string>> objects;
+  std::vector<ObjectRequest> objects;
 
   Collider* collider = nullptr;
 };

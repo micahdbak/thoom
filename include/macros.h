@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cmath>
+
 #define THOOM_CLAMP(_x, _min, _max) \
   ((_x) < (_min) ? (_min) : ((_x) > (_max) ? (_max) : (_x)))
 

@@ -3,7 +3,7 @@
 #include <iostream>
 
 #include "SDL3/SDL_keycode.h"
-#include "game.h"
+#include "scene.h"
 
 namespace thoom {
 
@@ -90,9 +90,9 @@ void Controller::handle_key_down(SDL_Keycode keycode) {
 
   if (keycode >= (uint32_t)'0' && keycode <= (uint32_t)'9') {
     // digits added to the digit string must be enterred within <1s
-    if (game->ticks - this->last_digit_hit > 1000) {
+    if (Scene::instance->ticks - this->last_digit_hit > 1000) {
       this->digit_string.clear();
-      this->last_digit_hit = game->ticks;
+      this->last_digit_hit = Scene::instance->ticks;
     }
 
     this->digit = keycode - '0';
