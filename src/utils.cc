@@ -1,8 +1,14 @@
 #include "utils.h"
 
 #include <cmath>
+#include <cstddef>
+#include <numbers>
 
 namespace thoom {
+
+double distance_between_points(double x1, double y1, double x2, double y2) {
+  return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
+}
 
 int direction_from_dirs(int x_dir, int y_dir) {
   if (x_dir < 0) {
@@ -50,8 +56,8 @@ void dirs_from_direction(int direction, int* x_dir, int* y_dir) {
 void dir_to_point(float x1, float y1, float x2, float y2, int* x_dir,
                   int* y_dir) {
   float angle = atan2(y2 - y1, x2 - x1);  // [-PI,PI]
-  angle += SDL_PI_D;                      // [0,2.0*PI]
-  angle /= SDL_PI_D;                      // [0,2.0]
+  angle += std::numbers::pi;              // [0,2.0*PI]
+  angle /= std::numbers::pi;              // [0,2.0]
   angle *= 4.0f;                          // [0,8.0]
   angle += 0.5f;                          // [0.5,8.5] - for integer rounding
 
