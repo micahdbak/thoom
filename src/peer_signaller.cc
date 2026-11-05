@@ -49,8 +49,7 @@ void PeerSignaller::disconnect() {
 
 void PeerSignaller::send(const std::string& message) {
   if (this->state != PeerSignaller::State::CONNECTED || this->ws < 0) {
-    std::cerr << "PeerSignaller::send fatal error: not connected"
-              << std::endl;
+    std::cerr << "PeerSignaller::send fatal error: not connected" << std::endl;
     std::exit(1);
   }
 
@@ -101,7 +100,7 @@ void PeerSignaller::on_error(int, const char* error, void* user_ptr) {
 }
 
 void PeerSignaller::on_message(int, const char* message, int size,
-                                  void* user_ptr) {
+                               void* user_ptr) {
   // std::cout << "PeerSignaller::on_message" << std::endl;
   PeerSignaller* signaller = (PeerSignaller*)user_ptr;
   signaller->messages.push(message);

@@ -1,10 +1,9 @@
 #include "audio.h"
 
-#include <cmath>
 #include <cstdlib>
 #include <iostream>
 
-#include "macros.h"
+#include "utils.h"
 
 #define NUM_VOICES 32
 #define IDLE_THRESHOLD 4096      // 4KiB
@@ -120,7 +119,7 @@ void Audio::play(const std::string& wav_path, float gain, float x, float y,
   }
 
   float dist =
-      THOOM_DISTANCE_BETWEEN_POINTS(this->listener_x, this->listener_y, x, y);
+      distance_between_points(this->listener_x, this->listener_y, x, y);
 
   if (dist > LISTEN_FAR) {
     return;

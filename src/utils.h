@@ -1,10 +1,8 @@
 #pragma once
 
-#include <SDL3/SDL.h>
-
-#include "macros.h"
-
 namespace thoom {
+
+double distance_between_points(double x1, double y1, double x2, double y2);
 
 int direction_from_dirs(int x_dir, int y_dir);
 

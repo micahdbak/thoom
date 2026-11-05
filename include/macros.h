@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cmath>
-
 #define THOOM_CLAMP(_x, _min, _max) \
   ((_x) < (_min) ? (_min) : ((_x) > (_max) ? (_max) : (_x)))
 
@@ -12,9 +10,6 @@
 #define THOOM_SIGN(_x) ((_x) == 0 ? 0 : ((_x) > 0 ? 1 : -1))
 
 #define THOOM_ABS(_x) ((_x) < 0 ? (-1 * (_x)) : (_x))
-
-#define THOOM_DISTANCE_BETWEEN_POINTS(x1, y1, x2, y2) \
-  (sqrt(pow((x2) - (x1), 2) + pow((y2) - (y1), 2)))
 
 #define THOOM_SQRT2_F 1.4142135623730951f
 #define THOOM_SQRT2_D 1.4142135623730951

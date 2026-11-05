@@ -83,11 +83,10 @@ void PeerConnection::kill() {
 }
 
 void PeerConnection::set_remote_description(const std::string& sdp,
-                                               const std::string& type) {
+                                            const std::string& type) {
   if (this->state != PeerConnection::COLLECTING || this->pc < 0) {
-    std::cerr
-        << "PeerConnection::set_remote_description fatal error: bad state"
-        << std::endl;
+    std::cerr << "PeerConnection::set_remote_description fatal error: bad state"
+              << std::endl;
     std::exit(1);
   }
 
@@ -101,7 +100,7 @@ std::pair<std::string, std::string> PeerConnection::get_local_description() {
 }
 
 void PeerConnection::add_candidate(const std::string& cand,
-                                      const std::string& mid) {
+                                   const std::string& mid) {
   if (this->state != PeerConnection::COLLECTING || this->pc < 0) {
     std::cerr << "PeerConnection::add_candidate fatal error: bad state"
               << std::endl;
@@ -142,7 +141,7 @@ std::string PeerConnection::receive() {
 }
 
 void PeerConnection::on_description(int, const char* sdp, const char* type,
-                                       void* user_ptr) {
+                                    void* user_ptr) {
   // std::cout << "PeerConnection::on_description" << std::endl;
   PeerConnection* connection = (PeerConnection*)user_ptr;
   connection->description.first = sdp;
@@ -150,7 +149,7 @@ void PeerConnection::on_description(int, const char* sdp, const char* type,
 }
 
 void PeerConnection::on_candidate(int, const char* cand, const char* mid,
-                                     void* user_ptr) {
+                                  void* user_ptr) {
   // std::cout << "PeerConnection::on_candidate" << std::endl;
   PeerConnection* connection = (PeerConnection*)user_ptr;
   connection->candidates.push(std::pair<std::string, std::string>(cand, mid));
@@ -189,7 +188,7 @@ void PeerConnection::on_error(int, const char* error, void* user_ptr) {
 }
 
 void PeerConnection::on_message(int, const char* message, int size,
-                                   void* user_ptr) {
+                                void* user_ptr) {
   PeerConnection* connection = (PeerConnection*)user_ptr;
   if (size > 0) {
     std::cerr
