@@ -5,8 +5,12 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
+#include "colour.h"
+#include "font.h"
 #include "map.h"
+#include "sprite.h"
 #include "window.h"
 
 namespace thoom {

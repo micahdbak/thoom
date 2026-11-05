@@ -1,12 +1,15 @@
 #include "save_data.h"
 
-#include <sys/stat.h>
+#include <SDL3/SDL.h>
+#include <string.h>
 
-#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #include "scene.h"
 

@@ -3,9 +3,14 @@
 #include <rtc/rtc.h>
 
 #include <chrono>
-#include <cstring>
+#include <cstdlib>
 #include <iostream>
+#include <mutex>
+#include <queue>
 #include <random>
+#include <string>
+#include <thread>
+#include <utility>
 
 #define CANDIDATE_MSG "candidate"
 #define DESCRIPTION_MSG "description"

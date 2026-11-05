@@ -1,10 +1,17 @@
 #include "scene.h"
 
+#include <SDL3/SDL.h>
+
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-#include "SDL3/SDL_timer.h"
 #include "audio.h"
+#include "map.h"
+#include "object.h"
 #include "renderer.h"
 #include "save_data.h"
 

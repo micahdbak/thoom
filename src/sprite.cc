@@ -1,7 +1,5 @@
 #include "sprite.h"
 
-#include <iostream>
-
 #include "scene.h"
 #include "texture.h"
 

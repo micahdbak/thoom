@@ -1,9 +1,21 @@
 #include "map.h"
 
-#include <cstdlib>
-#include <iostream>
+#include <SDL3/SDL.h>
 
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <string>
+#include <vector>
+
+#include "collider.h"
+#include "colour.h"
 #include "macros.h"
+#include "map_layer.h"
+#include "object.h"
+#include "tilesheet.h"
 #include "window.h"
 
 namespace thoom {

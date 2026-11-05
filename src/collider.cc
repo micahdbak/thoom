@@ -1,7 +1,12 @@
 #include "collider.h"
 
+#include <SDL3/SDL.h>
+
 #include <cstdlib>
+#include <utility>
 #include <vector>
+
+#include "macros.h"
 
 namespace thoom {
 

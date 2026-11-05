@@ -1,7 +1,10 @@
 #include "audio.h"
 
+#include <SDL3/SDL.h>
+
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 #include "utils.h"
 

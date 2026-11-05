@@ -1,9 +1,12 @@
 #include "texture.h"
 
+#include <SDL3/SDL.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <string>
 
 #include "window.h"
 

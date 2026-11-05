@@ -1,11 +1,16 @@
 #include "map_layer.h"
 
+#include <SDL3/SDL.h>
+
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <vector>
 
+#include "colour.h"
 #include "renderer.h"
 #include "texture.h"
+#include "tilesheet.h"
 
 namespace thoom {
 

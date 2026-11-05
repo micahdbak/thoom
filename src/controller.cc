@@ -1,5 +1,7 @@
 #include "controller.h"
 
+#include <SDL3/SDL.h>
+
 namespace thoom {
 
 void Controller::handle_key_press(SDL_Keycode keycode) {
