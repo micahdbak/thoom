@@ -33,7 +33,7 @@ jobs:
             libpipewire-0.3-dev \
             libpulse-dev \
             libssl-dev \
-            libusb-1.0-dev \
+            libusb-1.0-0-dev \
             libwayland-dev \
             libx11-dev \
             libxkbcommon-dev
