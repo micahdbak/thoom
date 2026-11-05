@@ -2,13 +2,7 @@
 
 #include <SDL3/SDL.h>
 
-#include <map>
-#include <string>
-#include <vector>
-
 namespace thoom {
-
-#define NO_CHAR -1
 
 enum Button {
   MENU = 0,
@@ -26,48 +20,39 @@ enum Button {
   NULL_BUTTON
 };
 
-extern std::map<SDL_Keycode, Button> ktobutton_map;
-extern std::map<Button, SDL_Keycode> btokeycode_map;
-extern std::map<Button, std::string> btostring_map;
-
 class Controller {
  public:
   Controller() = default;
   ~Controller() = default;
 
-  void clear_hits();
-  void clear_all();
-  bool is_hit(Button button);
-  bool is_down(Button button);
+  void handle_key_press(SDL_Keycode keycode);
 
-  // network-connected player
-  void handle_button_hit(Button button);
-  void handle_button_down(Button button);
-  void handle_button_up(Button button);
+  void press(Button button);
+  void release(Button button);
+  bool consume_hit(Button button);
 
-  // keyboard
-  void handle_key_down(SDL_Keycode keycode);
-  void handle_key_up(SDL_Keycode keycode);
+  int held_dx() const;
+  int held_dy() const;
+  int consume_hit_dx();
+  int consume_hit_dy();
 
-  bool cheat_code(int a, int b, int c, int d);
-  int cheat_last(int a, int b, int c);
+  bool cheat_code(int a, int b, int c, int d) const;
 
-  char c = NO_CHAR;
-  int digit = 0;
+  void clear_hit_input();
+  void clear_input();
 
-  bool is_hit_map[NUM_BUTTONS] = {0};
-  bool is_down_map[NUM_BUTTONS] = {0};
+  bool down[NUM_BUTTONS] = {false};
 
-  Sint16 stick_x, stick_y;
-
-  SDL_Keycode last_input;
+  char character = '\0';
+  int digit = -1;
+  SDL_Keycode last_keycode = SDLK_UNKNOWN;
 
  private:
-  std::vector<int> digit_string;
-  Uint64 last_digit_hit = 0;
-};
+  bool hit[NUM_BUTTONS] = {false};
 
-extern Controller local_controller, remote_controller, captured_controller;
-extern bool capture_controls;
+  int digits[4] = {0};
+  int digit_count = 0;
+  Uint64 digit_ticks = 0;
+};
 
 };  // namespace thoom
