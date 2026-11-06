@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+#include <mutex>
 #include <queue>
 #include <string>
 #include <utility>
@@ -25,7 +27,7 @@ class PeerConnection {
   void send(const std::string& message);
   std::string receive();
 
-  State state = State::DEAD;
+  std::atomic<State> state{State::DEAD};
 
  private:
   static void on_description(int, const char* sdp, const char* type,
@@ -38,10 +40,12 @@ class PeerConnection {
   static void on_error(int, const char* error, void* user_ptr);
   static void on_message(int, const char* message, int size, void* user_ptr);
 
-  int pc = -1, dc = -1;
+  std::atomic<int> pc{-1};
+  std::atomic<int> dc{-1};
   std::pair<std::string, std::string> description;
   std::queue<std::pair<std::string, std::string>> candidates;
   std::queue<std::string> messages;
+  std::mutex data_mutex;  // guards description, candidates, and messages
 };
 
 };  // namespace thoom

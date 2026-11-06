@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <utility>
 
@@ -24,7 +25,7 @@ void PeerConnection::start_collecting(bool offerer) {
     std::exit(1);
   }
 
-  rtcConfiguration config;
+  rtcConfiguration config = {};
   config.iceServers = ICE_SERVERS;
   config.iceServersCount = NUM_ICE_SERVERS;
   config.proxyServer = nullptr;
@@ -97,6 +98,7 @@ void PeerConnection::set_remote_description(const std::string& sdp,
 }
 
 std::pair<std::string, std::string> PeerConnection::get_local_description() {
+  std::lock_guard<std::mutex> guard(this->data_mutex);
   std::pair<std::string, std::string> desc = this->description;
   this->description = std::pair<std::string, std::string>("", "");
   return desc;
@@ -114,6 +116,8 @@ void PeerConnection::add_candidate(const std::string& cand,
 }
 
 std::pair<std::string, std::string> PeerConnection::get_candidate() {
+  std::lock_guard<std::mutex> guard(this->data_mutex);
+
   if (this->candidates.empty()) {
     return std::pair<std::string, std::string>("", "");
   }
@@ -134,6 +138,8 @@ void PeerConnection::send(const std::string& message) {
 }
 
 std::string PeerConnection::receive() {
+  std::lock_guard<std::mutex> guard(this->data_mutex);
+
   if (this->messages.empty()) {
     return "";
   }
@@ -147,6 +153,7 @@ void PeerConnection::on_description(int, const char* sdp, const char* type,
                                     void* user_ptr) {
   // std::cout << "PeerConnection::on_description" << std::endl;
   PeerConnection* connection = (PeerConnection*)user_ptr;
+  std::lock_guard<std::mutex> guard(connection->data_mutex);
   connection->description.first = sdp;
   connection->description.second = type;
 }
@@ -155,6 +162,7 @@ void PeerConnection::on_candidate(int, const char* cand, const char* mid,
                                   void* user_ptr) {
   // std::cout << "PeerConnection::on_candidate" << std::endl;
   PeerConnection* connection = (PeerConnection*)user_ptr;
+  std::lock_guard<std::mutex> guard(connection->data_mutex);
   connection->candidates.push(std::pair<std::string, std::string>(cand, mid));
 }
 
@@ -199,6 +207,7 @@ void PeerConnection::on_message(int, const char* message, int size,
         << std::endl;
     std::exit(1);
   }
+  std::lock_guard<std::mutex> guard(connection->data_mutex);
   connection->messages.push(message);
 }
 
