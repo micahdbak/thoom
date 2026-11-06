@@ -6,7 +6,9 @@ extern "C" {
 #endif
 
 bool thoom_init(const char* title, unsigned int screen_width,
-                unsigned int screen_height);
+                unsigned int screen_height, bool offerer);
+
+void thoom_poll_events(bool* quit);
 
 void thoom_quit(void);
 
