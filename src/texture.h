@@ -6,8 +6,6 @@
 #include <string>
 #include <unordered_map>
 
-#include "macros.h"
-
 namespace thoom {
 
 class Texture {
@@ -16,12 +14,11 @@ class Texture {
 
   inline static Texture* instance = nullptr;
 
-  static void init();
-  static void shutdown();
+  static bool init();
+  static void quit();
 
   Texture() = default;
   ~Texture();
-  DISALLOW_COPY_AND_MOVE(Texture);
 
   void register_render_function(const std::string& name, RenderFunction func);
   SDL_Texture* load(const std::string& path);

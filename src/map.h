@@ -7,7 +7,6 @@
 
 #include "collider.h"
 #include "colour.h"
-#include "macros.h"
 #include "map_layer.h"
 #include "object.h"
 #include "tilesheet.h"
@@ -23,7 +22,6 @@ class Map {
   explicit Map(const char* map_path);
   Map(int tile_width, int tile_height, int cols, int rows);
   ~Map();
-  DISALLOW_COPY_AND_MOVE(Map);
 
   void write(const char* map_path) const;
 

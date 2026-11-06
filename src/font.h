@@ -50,7 +50,7 @@ namespace thoom {
 
 class Font {
  public:
-  static void load_fonts(std::vector<Font*>& fonts);
+  static bool load_fonts(std::vector<Font*>& fonts);
 
   Font(const char* font_path, int w, int h, int default_w,
        const std::unordered_map<char, int>& special_w);

@@ -2,23 +2,24 @@
 
 #include <SDL3/SDL.h>
 
-#include <cstdlib>
-#include <iostream>
+#include <cstdio>
 
 #include "controller.h"
+#include "thoom/macros.h"
 
 namespace thoom {
 
-void Input::init() {
+bool Input::init() {
   if (Input::instance != nullptr) {
-    std::cerr << "Input::init error: input already initialized" << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG "Input::init error: input already initialized\n");
+    return false;
   }
 
   Input::instance = new Input();
+  return true;
 }
 
-void Input::shutdown() {
+void Input::quit() {
   if (Input::instance == nullptr) {
     return;
   }

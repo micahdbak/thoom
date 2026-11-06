@@ -7,11 +7,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <string>
 #include <vector>
 
 #include "scene.h"
+#include "thoom/macros.h"
 
 namespace thoom {
 
@@ -19,12 +19,6 @@ SaveData save;
 
 #define PREF_ORG "CheddarAndFeta"
 #define PREF_APP "Game"
-
-#define CORRUPTED_EXIT                                                         \
-  {                                                                            \
-    std::cerr << "save_data.cpp (" << __LINE__ << "): bad save." << std::endl; \
-    exit(1);                                                                   \
-  }
 
 std::vector<std::string> SaveData::file_summaries() {
   char save_file_name[1024];
@@ -67,7 +61,10 @@ static unsigned long _djb2_hash(unsigned long starting_hash, const char* str) {
 }
 
 void SaveData::write_file(int file_i) {
-  if (file_i < 0) CORRUPTED_EXIT
+  if (file_i < 0) {
+    fprintf(stderr, THOOM_LOG "bad save.\n");
+    exit(1);
+  }
 
   char save_file_name[1024];
   char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
@@ -77,7 +74,10 @@ void SaveData::write_file(int file_i) {
            file_i);
   SDL_free(save_root);
   FILE* save_file = fopen(save_file_name, "w");
-  if (save_file == NULL) CORRUPTED_EXIT
+  if (save_file == NULL) {
+    fprintf(stderr, THOOM_LOG "bad save.\n");
+    exit(1);
+  }
 
   std::string line;
   unsigned long hash = 0;
@@ -116,7 +116,10 @@ void SaveData::write_file(int file_i) {
 #define MAX_LINE_LENGTH 10240  // 10kb
 
 int SaveData::load_file(int file_i) {
-  if (file_i < 0) CORRUPTED_EXIT
+  if (file_i < 0) {
+    fprintf(stderr, THOOM_LOG "bad save.\n");
+    exit(1);
+  }
 
   char save_file_name[1024];
   char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
@@ -167,7 +170,7 @@ int SaveData::load_file(int file_i) {
 
       if (1 != sscanf(line, "%lu\n", &hash_in_file)) {
         // TODO(micahdbak): error
-        std::exit(1);
+        exit(1);
       }
 
       fclose(save_file);

@@ -4,8 +4,6 @@
 
 #include <cstddef>
 
-#include "macros.h"
-
 namespace thoom {
 
 // clang-format off
@@ -73,7 +71,6 @@ class Collider {
  public:
   Collider(int tile_width, int tile_height, int cols, int rows);
   ~Collider();
-  DISALLOW_COPY_AND_MOVE(Collider);
 
   bool point_in_collider(float x, float y) const;
   bool in_sight(int x0, int y0, int x1, int y1, int* next_x, int* next_y) const;

@@ -3,11 +3,14 @@
 #include <rtc/rtc.h>
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
-#include <iostream>
 #include <string>
 #include <thread>
 
+#include "thoom/macros.h"
+
+// #define SIGNALLING_URL "ws://localhost:8080/sc/"
 #define SIGNALLING_URL "wss://cheese.micahdb.com/sc/"
 
 #define NTS -1
@@ -16,19 +19,21 @@ namespace thoom {
 
 void PeerSignaller::connect(const std::string& code, bool offerer) {
   if (this->state != PeerSignaller::State::NOT_CONNECTED) {
-    std::cerr << "PeerSignaller::connect fatal error: already connecting or "
-                 "connected"
-              << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG
+            "PeerSignaller::connect fatal error: already connecting or "
+            "connected\n");
+    exit(1);
   }
 
   std::string url = SIGNALLING_URL + code;
   this->ws = rtcCreateWebSocket(url.c_str());
   if (this->ws < 0) {
-    std::cerr << "PeerSignaller::connect fatal error: rtcCreateWebSocket "
-                 "returned error code: "
-              << this->ws << std::endl;
-    std::exit(1);
+    fprintf(stderr,
+            THOOM_LOG
+            "PeerSignaller::connect fatal error: rtcCreateWebSocket returned "
+            "error code: %d\n",
+            this->ws);
+    exit(1);
   }
 
   rtcSetUserPointer(this->ws, this);
@@ -51,8 +56,9 @@ void PeerSignaller::disconnect() {
 
 void PeerSignaller::send(const std::string& message) {
   if (this->state != PeerSignaller::State::CONNECTED || this->ws < 0) {
-    std::cerr << "PeerSignaller::send fatal error: not connected" << std::endl;
-    std::exit(1);
+    fprintf(stderr,
+            THOOM_LOG "PeerSignaller::send fatal error: not connected\n");
+    exit(1);
   }
 
   rtcSendMessage(this->ws, message.c_str(), NTS);
@@ -96,7 +102,7 @@ void PeerSignaller::on_close(int, void* user_ptr) {
 }
 
 void PeerSignaller::on_error(int, const char* error, void* user_ptr) {
-  std::cerr << "PeerSignaller::on_error: " << error << std::endl;
+  fprintf(stderr, THOOM_LOG "PeerSignaller::on_error: %s\n", error);
   PeerSignaller* signaller = (PeerSignaller*)user_ptr;
   signaller->disconnect();
 }

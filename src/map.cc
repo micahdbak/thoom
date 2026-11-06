@@ -6,107 +6,125 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <string>
 #include <vector>
 
 #include "collider.h"
 #include "colour.h"
-#include "macros.h"
 #include "map_layer.h"
 #include "object.h"
+#include "thoom/macros.h"
 #include "tilesheet.h"
 #include "window.h"
 
 namespace thoom {
 
-#define CORRUPTED_EXIT                                         \
-  {                                                            \
-    std::cerr << "map.cpp (" << __LINE__ << "): '" << map_path \
-              << "' corrupted." << std::endl;                  \
-    exit(1);                                                   \
+static int read_line(FILE* file, char* line, size_t size) {
+  if (fgets(line, (int)size, file) == NULL) {
+    return 0;
   }
 
+  line[strcspn(line, "\r\n")] = '\0';
+  return 1;
+}
+
 Map::Map(const char* map_path) {
-  if (map_path == nullptr) {
-    std::cerr << "map.cpp (" << __LINE__ << "): null map path." << std::endl;
+  std::string map_txt_path;
+  std::string map_bin_path;
+  FILE* txt_file = NULL;
+  FILE* bin_file = NULL;
+  char buff[1024];
+  char buff2[1024];
+  char buff3[1024];
+  uint8_t buffer[6];
+  int bg_r, bg_g, bg_b;
+  int ntilesheets = 0;
+  int nobjects = 0;
+  int i;
+
+  if (map_path == NULL) {
+    fprintf(stderr, THOOM_LOG "null map path.\n");
     exit(1);
   }
 
-  std::string map_txt_path = std::string(map_path) + ".txt";
-  std::string map_bin_path = std::string(map_path) + ".bin";
+  map_txt_path = std::string(map_path) + ".txt";
+  map_bin_path = std::string(map_path) + ".bin";
 
-  FILE* txt_file = fopen(map_txt_path.c_str(), "r");
-  if (txt_file == NULL) CORRUPTED_EXIT
-  char buff[1024], buff2[1024];
+  txt_file = fopen(map_txt_path.c_str(), "r");
+  if (txt_file == NULL) goto corrupted;
 
-  if (feof(txt_file)) CORRUPTED_EXIT;
-  fgets(buff, sizeof(buff), txt_file);
-  sscanf(buff, "%1023[^\n]", buff2);
-  buff2[1023] = '\0';
-  this->title = buff2;
+  /* map title */
+  if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
+  this->title = buff;
 
-  if (feof(txt_file)) CORRUPTED_EXIT;
-  fgets(buff, sizeof(buff), txt_file);
-  sscanf(buff, "%1023[^\n]", buff2);
-  buff2[1023] = '\0';
-  this->description = buff2;
+  /* map description */
+  if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
+  this->description = buff;
 
-  if (feof(txt_file)) CORRUPTED_EXIT;
-  fgets(buff, sizeof(buff), txt_file);
-  if (4 != sscanf(buff, "%d,%d,%d,%d", &this->tile_width, &this->tile_height,
-                  &this->cols, &this->rows))
-    CORRUPTED_EXIT
-  if (tile_width <= 0 || tile_height <= 0) CORRUPTED_EXIT
+  /* tile width, tile height, map columns, map rows */
 
-  if (feof(txt_file)) CORRUPTED_EXIT;
-  fgets(buff, sizeof(buff), txt_file);
-  int bg_r, bg_g, bg_b;
-  if (3 != sscanf(buff, "%d,%d,%d", &bg_r, &bg_g, &bg_b)) CORRUPTED_EXIT
+  if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
+  if (sscanf(buff, "%d,%d,%d,%d", &this->tile_width, &this->tile_height,
+             &this->cols, &this->rows) != 4) {
+    goto corrupted;
+  }
+
+  if (this->tile_width <= 0 || this->tile_height <= 0 || this->cols <= 0 ||
+      this->rows <= 0)
+    goto corrupted;
+
+  /* map background colour */
+
+  if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
+  if (sscanf(buff, "%d,%d,%d", &bg_r, &bg_g, &bg_b) != 3) {
+    goto corrupted;
+  }
+
   this->background = Colour(uint8_t(bg_r), uint8_t(bg_g), uint8_t(bg_b));
 
-  if (feof(txt_file)) CORRUPTED_EXIT;
-  fgets(buff, sizeof(buff), txt_file);
-  buff[strlen(buff) - 1] = '\0';  // remove newline
+  /* map ambience track */
+  if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
   this->ambience = buff;
 
-  // allocate the necessary memory
+  /* build map layers and colliders */
   this->layers[kBackgroundLayer] =
       new MapLayer(this->cols, this->rows, this->tile_width, this->tile_height,
                    this->background);
   this->layers[kForegroundLayer] = new MapLayer(
       this->cols, this->rows, this->tile_width, this->tile_height, kMask);
-
   this->collider =
       new Collider(this->tile_width, this->tile_height, this->cols, this->rows);
 
-  if (feof(txt_file)) CORRUPTED_EXIT;
-  fgets(buff, sizeof(buff), txt_file);
-  int ntilesheets = 0;
-  if (1 != sscanf(buff, "%d", &ntilesheets)) CORRUPTED_EXIT
+  /* map tilesheets */
 
-  for (int i = 0; i < ntilesheets; i++) {
-    if (feof(txt_file)) CORRUPTED_EXIT;
-    fgets(buff, sizeof(buff), txt_file);
-    sscanf(buff, "%1023[^\n]", buff2);
-    buff2[1023] = '\0';
+  if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
+  if (sscanf(buff, "%d", &ntilesheets) != 1 || ntilesheets < 0) {
+    goto corrupted;
+  }
+
+  for (i = 0; i < ntilesheets; i++) {
+    if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
+
     Tilesheet* tilesheet =
-        new Tilesheet(buff2, this->tile_width, this->tile_height);
-    if (tilesheet->texture == nullptr) CORRUPTED_EXIT
+        new Tilesheet(buff, this->tile_width, this->tile_height);
+
+    if (tilesheet->texture == NULL) goto corrupted;
+
     this->tilesheets.push_back(tilesheet);
   }
 
-  if (feof(txt_file)) CORRUPTED_EXIT;
-  fgets(buff, sizeof(buff), txt_file);
-  int nobjects = 0;
-  if (1 != sscanf(buff, "%d", &nobjects)) CORRUPTED_EXIT
+  /* map objects */
 
-  for (int i = 0; i < nobjects; i++) {
-    if (feof(txt_file)) CORRUPTED_EXIT;
-    fgets(buff, sizeof(buff), txt_file);
-    char buff3[1024];
-    if (2 != sscanf(buff, "%1023s %1023[^\n]", buff2, buff3)) CORRUPTED_EXIT
-    buff2[1023] = buff3[1023] = '\0';
+  if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
+  if (sscanf(buff, "%d", &nobjects) != 1 || nobjects < 0) {
+    goto corrupted;
+  }
+
+  for (i = 0; i < nobjects; i++) {
+    if (!read_line(txt_file, buff, sizeof(buff))) goto corrupted;
+
+    if (sscanf(buff, "%1023s %1023[^\n]", buff2, buff3) != 2) goto corrupted;
+
     ObjectRequest object;
     object.id = buff2;
     object.options = buff3;
@@ -114,60 +132,73 @@ Map::Map(const char* map_path) {
   }
 
   fclose(txt_file);
-  FILE* bin_file = fopen(map_bin_path.c_str(), "rb");
-  if (bin_file == NULL) CORRUPTED_EXIT
-  uint8_t buffer[6];
-  size_t nbytes;
+  txt_file = NULL;
 
-  // read tiles
-  while (fread(buffer, 1, 6, bin_file) == 6) {
+  /* map binary data */
+
+  bin_file = fopen(map_bin_path.c_str(), "rb");
+
+  if (bin_file == NULL) goto corrupted;
+
+  while (fread(buffer, 1, sizeof(buffer), bin_file) == sizeof(buffer)) {
     int x = int(buffer[3]);
     int y = int(buffer[4]);
     int coord = (y * this->cols) + x;
-    if (coord >= this->cols * this->rows) CORRUPTED_EXIT
 
-    // collider
-    if (buffer[5] == 'c') {
-      // make sure the collider actually exists
-      if (int(buffer[0]) >= n_MapColliders) CORRUPTED_EXIT
+    if (coord < 0 || coord >= this->cols * this->rows) goto corrupted;
 
-      this->collider->collision[coord] = int(buffer[0]);
-      // buffer[1] and buffer[2] are redundant
-      continue;
+    switch (buffer[5]) {
+      case 'c':
+        if (int(buffer[0]) >= n_MapColliders) goto corrupted;
+
+        this->collider->collision[coord] = int(buffer[0]);
+        break;
+
+      case 'b':
+      case 'f': {
+        Tile tile;
+        int layer_index;
+
+        tile.tilesheet = int(buffer[0]);
+        tile.x = int(buffer[1]);
+        tile.y = int(buffer[2]);
+
+        if (tile.tilesheet >= int(this->tilesheets.size()) ||
+            tile.x >= this->tilesheets[tile.tilesheet]->cols ||
+            tile.y >= this->tilesheets[tile.tilesheet]->rows) {
+          goto corrupted;
+        }
+
+        layer_index = buffer[5] == 'b' ? kBackgroundLayer : kForegroundLayer;
+        this->layers[layer_index]->add_tile(coord, tile);
+      } break;
+
+      default:
+        goto corrupted;
     }
-
-    Tile tile;
-    tile.tilesheet = int(buffer[0]);
-    tile.x = int(buffer[1]);
-    tile.y = int(buffer[2]);
-
-    // make sure nothing is corrupted
-    if (tile.tilesheet >= this->tilesheets.size() ||
-        tile.x >= this->tilesheets[tile.tilesheet]->cols ||
-        tile.y >= this->tilesheets[tile.tilesheet]->rows)
-      CORRUPTED_EXIT
-
-    // background or foreground tile
-    int layer_index;
-    if (buffer[5] == 'b') {
-      layer_index = kBackgroundLayer;
-    } else if (buffer[5] == 'f') {
-      layer_index = kForegroundLayer;
-    } else {
-      CORRUPTED_EXIT
-    }
-
-    this->layers[layer_index]->add_tile(coord, tile);
   }
 
-  // done reading file
   fclose(bin_file);
+  bin_file = NULL;
   this->path = map_path;
 
-  // render all tiles read from the file
-  for (int i = 0; i < this->cols * this->rows; i++) {
+  for (i = 0; i < this->cols * this->rows; i++) {
     render_tile(i % this->cols, i / this->cols);
   }
+
+  return;
+
+corrupted:
+  if (txt_file != NULL) {
+    fclose(txt_file);
+  }
+
+  if (bin_file != NULL) {
+    fclose(bin_file);
+  }
+
+  fprintf(stderr, THOOM_LOG "'%s' corrupted.\n", map_path);
+  exit(1);
 }
 
 Map::Map(int tile_width, int tile_height, int cols, int rows) {
@@ -215,7 +246,10 @@ void Map::write(const char* map_path) const {
   std::string map_bin_path = std::string(map_path) + ".bin";
 
   FILE* txt_file = fopen(map_txt_path.c_str(), "w");
-  if (txt_file == nullptr) CORRUPTED_EXIT
+  if (txt_file == nullptr) {
+    fprintf(stderr, THOOM_LOG "'%s' corrupted.\n", map_path);
+    exit(1);
+  }
 
   fprintf(txt_file, "%s\n%s\n", this->title.c_str(), this->description.c_str());
   fprintf(txt_file, "%d,%d,%d,%d\n", this->tile_width, this->tile_height,
@@ -239,7 +273,10 @@ void Map::write(const char* map_path) const {
 
   fclose(txt_file);
   FILE* bin_file = fopen(map_bin_path.c_str(), "wb");
-  if (bin_file == nullptr) CORRUPTED_EXIT;
+  if (bin_file == nullptr) {
+    fprintf(stderr, THOOM_LOG "'%s' corrupted.\n", map_path);
+    exit(1);
+  }
   uint8_t buffer[1024];
 
   // write tiles

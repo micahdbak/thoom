@@ -3,14 +3,15 @@
 #include <rtc/rtc.h>
 
 #include <chrono>
-#include <cstdlib>
-#include <iostream>
+#include <cstdio>
 #include <mutex>
 #include <queue>
 #include <random>
 #include <string>
 #include <thread>
 #include <utility>
+
+#include "thoom/macros.h"
 
 #define CANDIDATE_MSG "candidate"
 #define DESCRIPTION_MSG "description"
@@ -36,16 +37,17 @@ static std::string make_code() {
   return ret;
 }
 
-void Peer::init(bool offerer) {
+bool Peer::init(bool offerer) {
   if (Peer::instance != nullptr) {
-    std::cerr << "Peer::init error: a peer already exists." << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG "Peer::init error: a peer already exists.\n");
+    return false;
   }
 
   Peer::instance = new Peer(offerer);
+  return true;
 }
 
-void Peer::shutdown() {
+void Peer::quit() {
   if (Peer::instance == nullptr) {
     return;
   }

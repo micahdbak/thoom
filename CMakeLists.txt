@@ -54,6 +54,7 @@ add_library(thoom
   src/renderer.cc
   src/save_data.cc
   src/sprite.cc
+  src/thoom.cc
   src/tilesheet.cc
   src/utils.cc
   src/window.cc

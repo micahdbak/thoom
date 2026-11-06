@@ -5,24 +5,25 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <string>
 
+#include "thoom/macros.h"
 #include "window.h"
 
 namespace thoom {
 
-void Texture::init() {
+bool Texture::init() {
   if (Texture::instance != nullptr) {
-    std::cerr << "Texture::init error: texture already initialized"
-              << std::endl;
-    std::exit(1);
+    fprintf(stderr,
+            THOOM_LOG "Texture::init error: texture already initialized\n");
+    return false;
   }
 
   Texture::instance = new Texture();
+  return true;
 }
 
-void Texture::shutdown() {
+void Texture::quit() {
   if (Texture::instance == nullptr) {
     return;
   }
@@ -59,9 +60,11 @@ SDL_Texture* Texture::load(const std::string& path) {
     buff[1023] = '\0';
 
     if (this->render_functions.find(buff) == this->render_functions.end()) {
-      std::cerr << "Texture::load error: render function " << buff
-                << " does not exist." << std::endl;
-      std::exit(1);
+      fprintf(stderr,
+              THOOM_LOG
+              "Texture::load error: render function %s does not exist.\n",
+              buff);
+      exit(1);
     }
 
     char args[1024];
@@ -76,8 +79,8 @@ SDL_Texture* Texture::load(const std::string& path) {
 
   SDL_Surface* surface = SDL_LoadBMP(path.c_str());
   if (surface == nullptr) {
-    std::cerr << "SDL_LoadBMP error: " << path << " does not exist."
-              << std::endl;
+    fprintf(stderr, THOOM_LOG "SDL_LoadBMP error: %s does not exist.\n",
+            path.c_str());
     exit(1);
   }
 
@@ -94,8 +97,8 @@ SDL_Texture* Texture::create_texture(int w, int h, SDL_PixelFormat format,
       Window::instance->sdl_renderer, format, SDL_TEXTUREACCESS_TARGET, w, h);
 
   if (texture == nullptr) {
-    std::cerr << "Texture::create_texture error: " << SDL_GetError()
-              << std::endl;
+    fprintf(stderr, THOOM_LOG "Texture::create_texture error: %s\n",
+            SDL_GetError());
     return nullptr;
   }
 
@@ -110,8 +113,9 @@ SDL_Texture* Texture::create_texture_from_surface(SDL_Surface* surface,
       SDL_CreateTextureFromSurface(Window::instance->sdl_renderer, surface);
 
   if (texture == nullptr) {
-    std::cerr << "Texture::create_texture_from_surface error: "
-              << SDL_GetError() << std::endl;
+    fprintf(stderr,
+            THOOM_LOG "Texture::create_texture_from_surface error: %s\n",
+            SDL_GetError());
     return nullptr;
   }
 
@@ -125,15 +129,17 @@ SDL_Texture* Texture::create_texture_from_bmp_memory(const void* data,
                                                      SDL_ScaleMode scale_mode) {
   SDL_IOStream* io = SDL_IOFromConstMem(data, size);
   if (io == nullptr) {
-    std::cerr << "Texture::create_texture_from_bmp_memory error: "
-              << SDL_GetError() << std::endl;
+    fprintf(stderr,
+            THOOM_LOG "Texture::create_texture_from_bmp_memory error: %s\n",
+            SDL_GetError());
     return nullptr;
   }
 
   SDL_Surface* surface = SDL_LoadBMP_IO(io, true);
   if (surface == nullptr) {
-    std::cerr << "Texture::create_texture_from_bmp_memory error: "
-              << SDL_GetError() << std::endl;
+    fprintf(stderr,
+            THOOM_LOG "Texture::create_texture_from_bmp_memory error: %s\n",
+            SDL_GetError());
     return nullptr;
   }
 

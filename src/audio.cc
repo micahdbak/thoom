@@ -2,10 +2,11 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstdio>
 #include <cstdlib>
-#include <iostream>
 #include <string>
 
+#include "thoom/macros.h"
 #include "utils.h"
 
 #define NUM_VOICES 32
@@ -17,24 +18,26 @@
 #define LISTEN_NEAR 160.0f
 #define LISTEN_FAR 320.0f
 
-#define AUDIO_FAIL(_context)                                        \
-  do {                                                              \
-    std::cerr << (_context) << ": " << SDL_GetError() << std::endl; \
-    std::exit(1);                                                   \
-  } while (0)
-
 namespace thoom {
 
-void Audio::init() {
+bool Audio::init() {
   if (Audio::instance != nullptr) {
-    std::cerr << "Audio::init error: audio already initialized" << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG "Audio::init error: audio already initialized\n");
+    return false;
   }
 
-  Audio::instance = new Audio();
+  Audio* audio = new Audio();
+
+  if (!audio->ready) {
+    delete audio;
+    return false;
+  }
+
+  Audio::instance = audio;
+  return true;
 }
 
-void Audio::shutdown() {
+void Audio::quit() {
   if (Audio::instance == nullptr) {
     return;
   }
@@ -48,11 +51,15 @@ Audio::Audio() {
       SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
 
   if (this->device == 0) {
-    AUDIO_FAIL("Audio::Audio: SDL_OpenAudioDevice");
+    fprintf(stderr, THOOM_LOG "Audio::Audio: SDL_OpenAudioDevice: %s\n",
+            SDL_GetError());
+    return;
   }
 
   if (!SDL_GetAudioDeviceFormat(this->device, &this->spec, nullptr)) {
-    AUDIO_FAIL("Audio::Audio: SDL_GetAudioDeviceFormat");
+    fprintf(stderr, THOOM_LOG "Audio::Audio: SDL_GetAudioDeviceFormat: %s\n",
+            SDL_GetError());
+    return;
   }
 
   this->voices.resize(NUM_VOICES, nullptr);
@@ -61,11 +68,19 @@ Audio::Audio() {
     this->voices[i] = SDL_CreateAudioStream(&this->spec, &this->spec);
 
     if (this->voices[i] == nullptr) {
-      AUDIO_FAIL("Audio::Audio: SDL_CreateAudioStream");
+      fprintf(stderr, THOOM_LOG "Audio::Audio: SDL_CreateAudioStream: %s\n",
+              SDL_GetError());
+      return;
     }
 
-    SDL_BindAudioStream(this->device, this->voices[i]);
+    if (!SDL_BindAudioStream(this->device, this->voices[i])) {
+      fprintf(stderr, THOOM_LOG "Audio::Audio: SDL_BindAudioStream: %s\n",
+              SDL_GetError());
+      return;
+    }
   }
+
+  this->ready = true;
 }
 
 Audio::~Audio() {
@@ -98,7 +113,8 @@ void Audio::load(const std::string& wav_path) {
   Source source;
 
   if (!SDL_LoadWAV(wav_path.c_str(), &source.spec, &source.buf, &source.len)) {
-    AUDIO_FAIL("Audio::load: SDL_LoadWAV");
+    fprintf(stderr, THOOM_LOG "Audio::load: SDL_LoadWAV: %s\n", SDL_GetError());
+    exit(1);
   }
 
   this->sources[wav_path] = source;
@@ -148,7 +164,8 @@ void Audio::play(const std::string& wav_path, float gain, float x, float y,
     if (!SDL_SetAudioStreamFormat(this->voices[i], &source.spec, nullptr) ||
         !SDL_SetAudioStreamGain(this->voices[i], gain) ||
         !SDL_PutAudioStreamData(this->voices[i], source.buf, source.len)) {
-      AUDIO_FAIL("Audio::play");
+      fprintf(stderr, THOOM_LOG "Audio::play: %s\n", SDL_GetError());
+      exit(1);
     }
 
     break;
@@ -184,7 +201,8 @@ void Audio::loop(const std::string& wav_path) {
       !SDL_SetAudioStreamGain(this->voices[0], music_gain) ||
       !SDL_PutAudioStreamData(this->voices[0], this->ambience->buf,
                               this->ambience->len)) {
-    AUDIO_FAIL("Audio::loop");
+    fprintf(stderr, THOOM_LOG "Audio::loop: %s\n", SDL_GetError());
+    exit(1);
   }
 }
 
@@ -195,7 +213,8 @@ void Audio::step() {
 
   if (this->current_music_volume != this->music_volume) {
     if (!SDL_SetAudioStreamGain(this->voices[0], music_gain)) {
-      AUDIO_FAIL("Audio::step");
+      fprintf(stderr, THOOM_LOG "Audio::step: %s\n", SDL_GetError());
+      exit(1);
     }
 
     this->current_music_volume = this->music_volume;
@@ -210,7 +229,8 @@ void Audio::step() {
 
   if (!SDL_PutAudioStreamData(this->voices[0], this->ambience->buf,
                               this->ambience->len)) {
-    AUDIO_FAIL("Audio::step");
+    fprintf(stderr, THOOM_LOG "Audio::step: %s\n", SDL_GetError());
+    exit(1);
   }
 }
 

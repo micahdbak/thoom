@@ -2,9 +2,10 @@
 
 #include <SDL3/SDL.h>
 
-#include <iostream>
+#include <cstdio>
 
 #include "texture.h"
+#include "thoom/macros.h"
 
 namespace thoom {
 
@@ -12,8 +13,9 @@ Tilesheet::Tilesheet(const char* tilesheet_path, int tile_width,
                      int tile_height) {
   SDL_Surface* tilesheet_surface = SDL_LoadBMP(tilesheet_path);
   if (tilesheet_surface == nullptr) {
-    std::cerr << "Tilesheet::Tilesheet error: '" << tilesheet_path
-              << "' does not exist." << std::endl;
+    fprintf(stderr,
+            THOOM_LOG "Tilesheet::Tilesheet error: '%s' does not exist.\n",
+            tilesheet_path);
     return;
   }
 

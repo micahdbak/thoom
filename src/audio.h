@@ -6,8 +6,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "macros.h"
-
 namespace thoom {
 
 class Audio {
@@ -19,12 +17,11 @@ class Audio {
 
   inline static Audio* instance = nullptr;
 
-  static void init();
-  static void shutdown();
+  static bool init();
+  static void quit();
 
   Audio();
   ~Audio();
-  DISALLOW_COPY_AND_MOVE(Audio);
 
   void load(const std::string& wav_path);
   void set_listener(float x, float y);
@@ -54,6 +51,7 @@ class Audio {
 
   float listener_x = 0.0f, listener_y = 0.0f;
   int current_music_volume = 100;
+  bool ready = false;
 };
 
 };  // namespace thoom

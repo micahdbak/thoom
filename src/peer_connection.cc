@@ -2,11 +2,13 @@
 
 #include <rtc/rtc.h>
 
+#include <cstdio>
 #include <cstdlib>
-#include <iostream>
 #include <mutex>
 #include <string>
 #include <utility>
+
+#include "thoom/macros.h"
 
 #define NUM_ICE_SERVERS 2
 
@@ -19,10 +21,10 @@ static const char* ICE_SERVERS[] = {"stun:droppr.net:5051",
 
 void PeerConnection::start_collecting(bool offerer) {
   if (this->state != PeerConnection::State::DEAD) {
-    std::cerr << "PeerConnection::start_collecting fatal error: already "
-                 "collecting or alive"
-              << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG
+            "PeerConnection::start_collecting fatal error: already collecting "
+            "or alive\n");
+    exit(1);
   }
 
   rtcConfiguration config = {};
@@ -43,9 +45,11 @@ void PeerConnection::start_collecting(bool offerer) {
 
   this->pc = rtcCreatePeerConnection(&config);
   if (this->pc < 0) {
-    std::cerr << "PeerConnection::start_collecting fatal error: "
-                 "rtcCreatePeerConnection returned error code: "
-              << this->pc << std::endl;
+    fprintf(stderr,
+            THOOM_LOG
+            "PeerConnection::start_collecting fatal error: "
+            "rtcCreatePeerConnection returned error code: %d\n",
+            this->pc.load());
     exit(1);
   }
   rtcSetUserPointer(this->pc, this);
@@ -58,9 +62,11 @@ void PeerConnection::start_collecting(bool offerer) {
   if (offerer) {
     this->dc = rtcCreateDataChannel(this->pc, "messages");
     if (this->dc < 0) {
-      std::cerr << "PeerConnection::start_collecting fatal error: "
-                   "rtcCreateDataChannel returned error code: "
-                << this->dc << std::endl;
+      fprintf(stderr,
+              THOOM_LOG
+              "PeerConnection::start_collecting fatal error: "
+              "rtcCreateDataChannel returned error code: %d\n",
+              this->dc.load());
       exit(1);
     }
     rtcSetOpenCallback(this->dc, PeerConnection::on_open);
@@ -89,9 +95,9 @@ void PeerConnection::kill() {
 void PeerConnection::set_remote_description(const std::string& sdp,
                                             const std::string& type) {
   if (this->state != PeerConnection::COLLECTING || this->pc < 0) {
-    std::cerr << "PeerConnection::set_remote_description fatal error: bad state"
-              << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG
+            "PeerConnection::set_remote_description fatal error: bad state\n");
+    exit(1);
   }
 
   rtcSetRemoteDescription(this->pc, sdp.c_str(), type.c_str());
@@ -107,9 +113,9 @@ std::pair<std::string, std::string> PeerConnection::get_local_description() {
 void PeerConnection::add_candidate(const std::string& cand,
                                    const std::string& mid) {
   if (this->state != PeerConnection::COLLECTING || this->pc < 0) {
-    std::cerr << "PeerConnection::add_candidate fatal error: bad state"
-              << std::endl;
-    std::exit(1);
+    fprintf(stderr,
+            THOOM_LOG "PeerConnection::add_candidate fatal error: bad state\n");
+    exit(1);
   }
 
   rtcAddRemoteCandidate(this->pc, cand.c_str(), mid.c_str());
@@ -129,8 +135,8 @@ std::pair<std::string, std::string> PeerConnection::get_candidate() {
 
 void PeerConnection::send(const std::string& message) {
   if (this->state != PeerConnection::ALIVE || this->pc < 0) {
-    std::cerr << "PeerConnection::send warning: couldn't send message"
-              << std::endl;
+    fprintf(stderr,
+            THOOM_LOG "PeerConnection::send warning: couldn't send message\n");
     return;
   }
 
@@ -190,7 +196,7 @@ void PeerConnection::on_close(int, void* user_ptr) {
 }
 
 void PeerConnection::on_error(int, const char* error, void* user_ptr) {
-  std::cerr << "PeerConnection::on_error: " << error << std::endl;
+  fprintf(stderr, THOOM_LOG "PeerConnection::on_error: %s\n", error);
   PeerConnection* connection = (PeerConnection*)user_ptr;
   connection->kill();
 
@@ -202,10 +208,10 @@ void PeerConnection::on_message(int, const char* message, int size,
                                 void* user_ptr) {
   PeerConnection* connection = (PeerConnection*)user_ptr;
   if (size > 0) {
-    std::cerr
-        << "PeerConnection::on_message fatal error: received binary message"
-        << std::endl;
-    std::exit(1);
+    fprintf(
+        stderr, THOOM_LOG
+        "PeerConnection::on_message fatal error: received binary message\n");
+    exit(1);
   }
   std::lock_guard<std::mutex> guard(connection->data_mutex);
   connection->messages.push(message);
