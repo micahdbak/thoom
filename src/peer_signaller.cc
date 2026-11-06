@@ -10,7 +10,7 @@
 
 #include "thoom/macros.h"
 
-//#define SIGNALLING_URL "ws://localhost:8080/sc/"
+// #define SIGNALLING_URL "ws://localhost:8080/sc/"
 #define SIGNALLING_URL "wss://cheese.micahdb.com/sc/"
 
 #define NTS -1
