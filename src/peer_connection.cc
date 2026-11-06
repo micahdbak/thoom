@@ -1,5 +1,6 @@
 #include "peer_connection.h"
 
+#include <mutex>
 #include <rtc/rtc.h>
 
 #include <cstdlib>
