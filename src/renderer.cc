@@ -6,9 +6,11 @@
 #include <cstdio>
 #include <string>
 
+#include "collider.h"
 #include "colour.h"
 #include "font.h"
 #include "map.h"
+#include "map_layer.h"
 #include "sprite.h"
 #include "thoom/macros.h"
 #include "window.h"
@@ -71,6 +73,48 @@ float Renderer::world_to_screen_x(float x) const {
 float Renderer::world_to_screen_y(float y) const {
   return y - float(this->view_y) +
          float(Window::instance->screen_height) / 2.0f;
+}
+
+void Renderer::map_rect(const Map* map, const SDL_FRect* viewport,
+                        SDL_FRect* src_rect, SDL_FRect* dst_rect) const {
+  if (src_rect == nullptr || dst_rect == nullptr) return;
+
+  src_rect->x = 0.0f;
+  src_rect->y = 0.0f;
+  src_rect->w = 0.0f;
+  src_rect->h = 0.0f;
+  *dst_rect = *src_rect;
+
+  if (map == nullptr || viewport == nullptr) return;
+
+  int viewport_x = int(viewport->x);
+  int viewport_y = int(viewport->y);
+  int viewport_w = int(viewport->w);
+  int viewport_h = int(viewport->h);
+
+  if (viewport_w <= 0 || viewport_h <= 0) return;
+
+  int map_width = map->tile_width * map->cols;
+  int map_height = map->tile_height * map->rows;
+  int corner_x = int(this->view_x) - (viewport_w / 2);
+  int corner_y = int(this->view_y) - (viewport_h / 2);
+
+  int left = THOOM_MAX(corner_x, 0);
+  int top = THOOM_MAX(corner_y, 0);
+  int right = THOOM_MIN(corner_x + viewport_w, map_width);
+  int bottom = THOOM_MIN(corner_y + viewport_h, map_height);
+
+  if (right <= left || bottom <= top) return;
+
+  src_rect->x = float(left);
+  src_rect->y = float(top);
+  src_rect->w = float(right - left);
+  src_rect->h = float(bottom - top);
+
+  dst_rect->x = float(viewport_x + (left - corner_x));
+  dst_rect->y = float(viewport_y + (top - corner_y));
+  dst_rect->w = src_rect->w;
+  dst_rect->h = src_rect->h;
 }
 
 void Renderer::clear(SDL_Texture* texture, Colour colour) {
@@ -255,38 +299,188 @@ void Renderer::draw_text(SDL_Texture* dst, int font, std::string text, int x,
   SDL_SetRenderTarget(Window::instance->sdl_renderer, Window::instance->screen);
 }
 
-void Renderer::draw_map_background(Map* map) {
-  if (map == nullptr) return;
+void Renderer::draw_map_layer(SDL_Texture* dst, Map* map,
+                              const SDL_FRect* viewport, int layer,
+                              float alpha) {
+  if (dst == nullptr || map == nullptr || viewport == nullptr) return;
+  if (layer < 0 || layer >= Map::kLayerCount) return;
 
-  SDL_Texture* texture = map->layers[Map::kBackgroundLayer]->texture;
-  if (texture == nullptr) return;
+  MapLayer* map_layer = map->layers[layer];
 
-  SDL_FRect src_rect = {0.0f, 0.0f, float(Window::instance->screen_width),
-                        float(Window::instance->screen_height)};
-  SDL_FRect dst_rect = src_rect;
-  int corner_x = int(this->view_x) - Window::instance->screen_width / 2;
-  int corner_y = int(this->view_y) - Window::instance->screen_height / 2;
+  if (map_layer == nullptr || map_layer->texture == nullptr) return;
 
-  Map::make_map_rect(corner_x, corner_y, texture->w, texture->h, &src_rect,
-                     &dst_rect);
-  this->draw_texture(Window::instance->screen, texture, &src_rect, &dst_rect);
+  SDL_FRect src_rect;
+  SDL_FRect dst_rect;
+  this->map_rect(map, viewport, &src_rect, &dst_rect);
+
+  if (src_rect.w <= 0.0f || src_rect.h <= 0.0f) return;
+
+  if (alpha < 0.0f) alpha = 0.0f;
+  if (alpha > 1.0f) alpha = 1.0f;
+
+  if (alpha < 1.0f) {
+    SDL_SetTextureAlphaMod(map_layer->texture, Uint8((alpha * 255.0f) + 0.5f));
+  }
+
+  this->draw_texture(dst, map_layer->texture, &src_rect, &dst_rect);
+
+  if (alpha < 1.0f) {
+    SDL_SetTextureAlphaMod(map_layer->texture, 0xff);
+  }
 }
 
-void Renderer::draw_map_foreground(Map* map) {
-  if (map == nullptr) return;
-
-  SDL_Texture* texture = map->layers[Map::kForegroundLayer]->texture;
-  if (texture == nullptr) return;
-
-  SDL_FRect src_rect = {0.0f, 0.0f, float(Window::instance->screen_width),
+void Renderer::draw_world(Map* map) {
+  SDL_FRect viewport = {0.0f, 0.0f, float(Window::instance->screen_width),
                         float(Window::instance->screen_height)};
-  SDL_FRect dst_rect = src_rect;
-  int corner_x = int(this->view_x) - Window::instance->screen_width / 2;
-  int corner_y = int(this->view_y) - Window::instance->screen_height / 2;
+  Colour background = map != nullptr ? map->background : kBlack;
 
-  Map::make_map_rect(corner_x, corner_y, texture->w, texture->h, &src_rect,
-                     &dst_rect);
-  this->draw_texture(Window::instance->screen, texture, &src_rect, &dst_rect);
+  Window::instance->clear_screen(background);
+
+  if (map != nullptr) {
+    this->draw_map_layer(Window::instance->screen, map, &viewport,
+                         Map::kBackgroundLayer, 1.0f);
+  }
+
+  this->draw_sprites();
+
+  if (map != nullptr) {
+    this->draw_map_layer(Window::instance->screen, map, &viewport,
+                         Map::kForegroundLayer, 1.0f);
+  }
+}
+
+void Renderer::draw_collision_tile(SDL_Texture* dst, Map* map,
+                                   const SDL_FRect* viewport, int x, int y,
+                                   Colour colour) {
+  if (dst == nullptr || map == nullptr || map->collider == nullptr ||
+      viewport == nullptr) {
+    return;
+  }
+
+  int collider = map->collider->get(x, y);
+
+  if (collider < 0) return;
+
+  SDL_FRect src_rect;
+  SDL_FRect dst_rect;
+  this->map_rect(map, viewport, &src_rect, &dst_rect);
+
+  if (src_rect.w <= 0.0f || src_rect.h <= 0.0f) return;
+
+  SDL_Rect clip;
+  clip.x = int(viewport->x);
+  clip.y = int(viewport->y);
+  clip.w = int(viewport->w);
+  clip.h = int(viewport->h);
+
+  SDL_Vertex vertices[4];
+
+  if (!this->build_collision_quad(map, &src_rect, &dst_rect, x, y, collider,
+                                  colour, vertices)) {
+    return;
+  }
+
+  const int indices[6] = {0, 1, 2, 2, 3, 0};
+  SDL_Renderer* renderer = Window::instance->sdl_renderer;
+
+  SDL_SetRenderTarget(renderer, dst);
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderClipRect(renderer, &clip);
+  SDL_RenderGeometry(renderer, nullptr, vertices, 4, indices, 6);
+  SDL_SetRenderClipRect(renderer, nullptr);
+  SDL_SetRenderTarget(renderer, Window::instance->screen);
+}
+
+void Renderer::draw_collision(SDL_Texture* dst, Map* map,
+                              const SDL_FRect* viewport, Colour colour) {
+  if (dst == nullptr || map == nullptr || map->collider == nullptr ||
+      viewport == nullptr) {
+    return;
+  }
+
+  SDL_FRect src_rect;
+  SDL_FRect dst_rect;
+  this->map_rect(map, viewport, &src_rect, &dst_rect);
+
+  if (src_rect.w <= 0.0f || src_rect.h <= 0.0f) return;
+
+  SDL_Rect clip;
+  clip.x = int(viewport->x);
+  clip.y = int(viewport->y);
+  clip.w = int(viewport->w);
+  clip.h = int(viewport->h);
+
+  const int indices[6] = {0, 1, 2, 2, 3, 0};
+  SDL_Renderer* renderer = Window::instance->sdl_renderer;
+
+  SDL_SetRenderTarget(renderer, dst);
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+  SDL_SetRenderClipRect(renderer, &clip);
+
+  for (int y = 0; y < map->rows; y++) {
+    for (int x = 0; x < map->cols; x++) {
+      int collider = map->collider->get(x, y);
+
+      if (collider < 0) continue;
+
+      SDL_Vertex vertices[4];
+
+      if (!this->build_collision_quad(map, &src_rect, &dst_rect, x, y, collider,
+                                      colour, vertices)) {
+        continue;
+      }
+
+      SDL_RenderGeometry(renderer, nullptr, vertices, 4, indices, 6);
+    }
+  }
+
+  SDL_SetRenderClipRect(renderer, nullptr);
+  SDL_SetRenderTarget(renderer, Window::instance->screen);
+}
+
+void Renderer::draw_collision_sheet(SDL_Texture* dst, Map* map,
+                                    const SDL_FRect* dst_rect, int cols,
+                                    Colour colour) {
+  if (dst == nullptr || map == nullptr || map->collider == nullptr ||
+      dst_rect == nullptr || cols <= 0) {
+    return;
+  }
+
+  int count = int(n_MapColliders) + 1;
+  int rows = (count + cols - 1) / cols;
+
+  if (rows <= 0 || dst_rect->w <= 0.0f || dst_rect->h <= 0.0f) return;
+  if (map->tile_width <= 0 || map->tile_height <= 0) return;
+
+  float cell_width = dst_rect->w / float(cols);
+  float cell_height = dst_rect->h / float(rows);
+  float scale_x = cell_width / float(map->tile_width);
+  float scale_y = cell_height / float(map->tile_height);
+
+  SDL_SetRenderDrawBlendMode(Window::instance->sdl_renderer,
+                             SDL_BLENDMODE_BLEND);
+
+  for (int i = 0; i < int(n_MapColliders); i++) {
+    int cell_x = (i + 1) % cols;
+    int cell_y = (i + 1) / cols;
+    float origin_x = dst_rect->x + (float(cell_x) * cell_width);
+    float origin_y = dst_rect->y + (float(cell_y) * cell_height);
+
+    const Quad& quad = map->collider->quads[i];
+    SDL_Vertex vertices[4];
+
+    for (int j = 0; j < 4; j++) {
+      vertices[j].color.r = float(colour.r) / 255.0f;
+      vertices[j].color.g = float(colour.g) / 255.0f;
+      vertices[j].color.b = float(colour.b) / 255.0f;
+      vertices[j].color.a = float(colour.a) / 255.0f;
+      vertices[j].position.x = origin_x + (quad.vertex[j].x * scale_x);
+      vertices[j].position.y = origin_y + (quad.vertex[j].y * scale_y);
+    }
+
+    const int indices[6] = {0, 1, 2, 2, 3, 0};
+    this->draw_geometry(dst, nullptr, vertices, 4, indices, 6);
+  }
 }
 
 void Renderer::push_sprite(const std::string& tex_id, SDL_Texture* texture,
@@ -332,6 +526,36 @@ void Renderer::draw_sprites() {
   }
 
   this->sprites.clear();  // clear sprites; next frame will repopulate
+}
+
+bool Renderer::build_collision_quad(Map* map, const SDL_FRect* src_rect,
+                                    const SDL_FRect* dst_rect, int x, int y,
+                                    int collider, Colour colour,
+                                    SDL_Vertex* vertices) const {
+  if (collider < 0 || collider >= int(n_MapColliders)) return false;
+
+  SDL_FRect tile_rect;
+  tile_rect.x = float(x * map->tile_width);
+  tile_rect.y = float(y * map->tile_height);
+  tile_rect.w = float(map->tile_width);
+  tile_rect.h = float(map->tile_height);
+
+  if (!SDL_HasRectIntersectionFloat(&tile_rect, src_rect)) return false;
+
+  const Quad& quad = map->collider->quads[collider];
+
+  for (int i = 0; i < 4; i++) {
+    vertices[i].color.r = float(colour.r) / 255.0f;
+    vertices[i].color.g = float(colour.g) / 255.0f;
+    vertices[i].color.b = float(colour.b) / 255.0f;
+    vertices[i].color.a = float(colour.a) / 255.0f;
+    vertices[i].position.x =
+        dst_rect->x + (tile_rect.x + quad.vertex[i].x) - src_rect->x;
+    vertices[i].position.y =
+        dst_rect->y + (tile_rect.y + quad.vertex[i].y) - src_rect->y;
+  }
+
+  return true;
 }
 
 };  // namespace thoom

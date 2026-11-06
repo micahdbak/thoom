@@ -15,7 +15,6 @@
 #include "object.h"
 #include "thoom/macros.h"
 #include "tilesheet.h"
-#include "window.h"
 
 namespace thoom {
 
@@ -170,7 +169,7 @@ Map::Map(const char* map_path) {
         }
 
         layer_index = buffer[5] == 'b' ? kBackgroundLayer : kForegroundLayer;
-        this->layers[layer_index]->add_tile(coord, tile);
+        this->layers[layer_index]->add_tile(x, y, tile);
       } break;
 
       default:
@@ -310,37 +309,181 @@ void Map::write(const char* map_path) const {
   fclose(bin_file);
 }
 
-void Map::render_tile(int x, int y) const {
-  this->layers[kBackgroundLayer]->render_tile(
-      x, y, this->cols, this->tile_width, this->tile_height, this->tilesheets);
-  this->layers[kForegroundLayer]->render_tile(
-      x, y, this->cols, this->tile_width, this->tile_height, this->tilesheets);
+bool Map::has_tiles(int x, int y) const {
+  if (x < 0 || y < 0 || x >= this->cols || y >= this->rows) {
+    return false;
+  }
+
+  for (int layer = 0; layer < kLayerCount; layer++) {
+    if (this->layers[layer] != nullptr &&
+        this->layers[layer]->has_tiles(x, y)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
-void Map::make_map_rect(int x, int y, int w, int h, SDL_FRect* src_rect,
-                        SDL_FRect* dst_rect) {
+bool Map::add_region(int layer, int x, int y, int tilesheet, int src_x,
+                     int src_y, int src_w, int src_h) {
+  if (layer < 0 || layer >= kLayerCount || this->layers[layer] == nullptr) {
+    return false;
+  }
+
+  if (tilesheet < 0 || tilesheet >= int(this->tilesheets.size())) {
+    return false;
+  }
+
+  if (src_w <= 0 || src_h <= 0) {
+    return false;
+  }
+
+  Tilesheet* sheet = this->tilesheets[tilesheet];
+
+  if (src_x < 0) {
+    x -= src_x;
+    src_w += src_x;
+    src_x = 0;
+  }
+
+  if (src_y < 0) {
+    y -= src_y;
+    src_h += src_y;
+    src_y = 0;
+  }
+
+  if (src_x >= sheet->cols || src_y >= sheet->rows) {
+    return false;
+  }
+
+  int width = THOOM_MIN(src_w, sheet->cols - src_x);
+  int height = THOOM_MIN(src_h, sheet->rows - src_y);
+
   if (x < 0) {
-    dst_rect->x = float(-1 * x);
-    dst_rect->w = float(THOOM_MIN(THOOM_SCREEN_WIDTH, w));
-    src_rect->x = 0.0f;
-  } else {
-    dst_rect->x = 0.0f;
-    dst_rect->w = float(THOOM_MIN(THOOM_SCREEN_WIDTH, w - x));
-    src_rect->x = float(x);
+    int skip = -x;
+    x = 0;
+    src_x += skip;
+    width -= skip;
   }
 
   if (y < 0) {
-    dst_rect->y = float(-1 * y);
-    dst_rect->h = float(THOOM_MIN(THOOM_SCREEN_HEIGHT, h));
-    src_rect->y = 0.0f;
-  } else {
-    dst_rect->y = 0.0f;
-    dst_rect->h = float(THOOM_MIN(THOOM_SCREEN_HEIGHT, h - y));
-    src_rect->y = float(y);
+    int skip = -y;
+    y = 0;
+    src_y += skip;
+    height -= skip;
   }
 
-  src_rect->w = dst_rect->w;
-  src_rect->h = dst_rect->h;
+  width = THOOM_MIN(width, this->cols - x);
+  height = THOOM_MIN(height, this->rows - y);
+
+  if (width <= 0 || height <= 0) {
+    return false;
+  }
+
+  bool placed = false;
+
+  for (int dy = 0; dy < height; dy++) {
+    for (int dx = 0; dx < width; dx++) {
+      Tile tile;
+      tile.tilesheet = static_cast<unsigned int>(tilesheet);
+      tile.x = static_cast<unsigned int>(src_x + dx);
+      tile.y = static_cast<unsigned int>(src_y + dy);
+
+      if (this->layers[layer]->place_tile(x + dx, y + dy, tile)) {
+        placed = true;
+        this->render_tile(x + dx, y + dy);
+      }
+    }
+  }
+
+  return placed;
+}
+
+bool Map::add_tilesheet(const char* path) {
+  Tilesheet* tilesheet =
+      new Tilesheet(path, this->tile_width, this->tile_height);
+
+  if (tilesheet->texture == nullptr) {
+    delete tilesheet;
+    return false;
+  }
+
+  this->tilesheets.push_back(tilesheet);
+  return true;
+}
+
+bool Map::remove_tilesheet(int index) {
+  if (index < 0 || index >= int(this->tilesheets.size())) {
+    return false;
+  }
+
+  unsigned int removed = static_cast<unsigned int>(index);
+
+  for (int layer_index = 0; layer_index < kLayerCount; layer_index++) {
+    MapLayer* layer = this->layers[layer_index];
+
+    if (layer == nullptr) {
+      continue;
+    }
+
+    for (int coord = 0; coord < this->cols * this->rows; coord++) {
+      std::vector<Tile>* vec = layer->tiles[coord];
+
+      if (vec == nullptr) {
+        continue;
+      }
+
+      std::vector<Tile>::iterator it = vec->begin();
+
+      while (it != vec->end()) {
+        if (it->tilesheet == removed) {
+          it = vec->erase(it);
+        } else {
+          if (it->tilesheet > removed) {
+            it->tilesheet--;
+          }
+          it++;
+        }
+      }
+
+      if (vec->empty()) {
+        delete vec;
+        layer->tiles[coord] = nullptr;
+      }
+    }
+  }
+
+  delete this->tilesheets[index];
+  this->tilesheets.erase(this->tilesheets.begin() + index);
+
+  for (int i = 0; i < this->cols * this->rows; i++) {
+    this->render_tile(i % this->cols, i / this->cols);
+  }
+
+  return true;
+}
+
+bool Map::add_object(const ObjectRequest& object) {
+  if (object.id.empty()) {
+    return false;
+  }
+
+  this->objects.push_back(object);
+  return true;
+}
+
+bool Map::remove_object(int index) {
+  if (index < 0 || index >= int(this->objects.size())) {
+    return false;
+  }
+
+  this->objects.erase(this->objects.begin() + index);
+  return true;
+}
+
+void Map::render_tile(int x, int y) const {
+  this->layers[kBackgroundLayer]->render_tile(x, y, this->tilesheets);
+  this->layers[kForegroundLayer]->render_tile(x, y, this->tilesheets);
 }
 
 };  // namespace thoom

@@ -64,6 +64,27 @@ static bool _point_in_triangle(SDL_FPoint pt, SDL_FPoint v1, SDL_FPoint v2,
   return !(has_neg && has_pos);
 }
 
+int Collider::get(int x, int y) const {
+  if (x < 0 || y < 0 || x >= this->cols || y >= this->rows) {
+    return -1;
+  }
+
+  return this->collision[(y * this->cols) + x];
+}
+
+bool Collider::set(int x, int y, int collider) {
+  if (x < 0 || y < 0 || x >= this->cols || y >= this->rows) {
+    return false;
+  }
+
+  if (collider < -1 || collider >= int(n_MapColliders)) {
+    return false;
+  }
+
+  this->collision[(y * this->cols) + x] = collider;
+  return true;
+}
+
 bool Collider::point_in_collider(float x, float y) const {
   // no collision
   if (this->collision == nullptr) return false;
