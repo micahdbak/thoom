@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "colour.h"
-#include "macros.h"
 #include "tilesheet.h"
 
 namespace thoom {
@@ -19,7 +18,6 @@ class MapLayer {
   MapLayer(int cols, int rows, int tile_width, int tile_height,
            Colour clear_colour);
   ~MapLayer();
-  DISALLOW_COPY_AND_MOVE(MapLayer);
 
   void add_tile(int coord, Tile tile);
   void render_tile(int x, int y, int cols, int tile_width, int tile_height,

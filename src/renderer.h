@@ -7,7 +7,6 @@
 
 #include "colour.h"
 #include "font.h"
-#include "macros.h"
 #include "map.h"
 #include "sprite.h"
 
@@ -17,12 +16,11 @@ class Renderer {
  public:
   inline static Renderer* instance = nullptr;
 
-  static void init();
-  static void shutdown();
+  static bool init();
+  static void quit();
 
   Renderer() = default;
   ~Renderer();
-  DISALLOW_COPY_AND_MOVE(Renderer);
 
   void set_view(float x, float y);
   void reset_view();

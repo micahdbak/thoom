@@ -3,8 +3,8 @@
 #include <SDL3/SDL.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
-#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -14,20 +14,22 @@
 #include "object.h"
 #include "renderer.h"
 #include "save_data.h"
+#include "thoom/macros.h"
 
 namespace thoom {
 
-void Scene::init(const std::string& initial_map, bool create_objects) {
+bool Scene::init(const std::string& initial_map, bool create_objects) {
   if (Scene::instance != nullptr) {
-    std::cerr << "Scene::init error: scene already initialized" << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG "Scene::init error: scene already initialized\n");
+    return false;
   }
 
   // Scene::Scene sets Scene::instance internally
   new Scene(initial_map, create_objects);
+  return true;
 }
 
-void Scene::shutdown() {
+void Scene::quit() {
   if (Scene::instance == nullptr) {
     return;
   }
@@ -78,9 +80,10 @@ void Scene::register_object(const ObjectDef& def) {
   }
 
   if (this->factories.find(def.id) != this->factories.end()) {
-    std::cerr << "Scene::register_object error: '" << def.id
-              << "' already exists" << std::endl;
-    std::exit(1);
+    fprintf(stderr,
+            THOOM_LOG "Scene::register_object error: '%s' already exists\n",
+            def.id);
+    exit(1);
   }
 
   this->factories[def.id] = def;
@@ -118,8 +121,9 @@ void Scene::create_object(const std::string& id, const std::string& options) {
       this->factories.find(id);
 
   if (it == this->factories.end()) {
-    std::cerr << "Scene::create_object error: '" << id << "' does not exist"
-              << std::endl;
+    fprintf(stderr,
+            THOOM_LOG "Scene::create_object error: '%s' does not exist\n",
+            id.c_str());
     return;
   }
 
@@ -280,8 +284,10 @@ void Scene::create_new_objects() {
         this->factories.find(request.id);
 
     if (it == this->factories.end()) {
-      std::cerr << "Scene::create_new_objects error: '" << request.id
-                << "' does not exist" << std::endl;
+      fprintf(stderr,
+              THOOM_LOG
+              "Scene::create_new_objects error: '%s' does not exist\n",
+              request.id.c_str());
       continue;
     }
 

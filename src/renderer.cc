@@ -3,35 +3,42 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
-#include <cstdlib>
-#include <iostream>
+#include <cstdio>
 #include <string>
 
 #include "colour.h"
 #include "font.h"
 #include "map.h"
 #include "sprite.h"
+#include "thoom/macros.h"
 #include "window.h"
 
 namespace thoom {
 
-void Renderer::init() {
+bool Renderer::init() {
   if (Renderer::instance != nullptr) {
-    std::cerr << "Renderer::init error: renderer already initialized"
-              << std::endl;
-    std::exit(1);
+    fprintf(stderr,
+            THOOM_LOG "Renderer::init error: renderer already initialized\n");
+    return false;
   }
 
   if (Window::instance == nullptr) {
-    std::cerr << "Renderer::init error: window not initialized" << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG "Renderer::init error: window not initialized\n");
+    return false;
   }
 
-  Renderer::instance = new Renderer();
-  Font::load_fonts(Renderer::instance->fonts);
+  Renderer* renderer = new Renderer();
+
+  if (!Font::load_fonts(renderer->fonts)) {
+    delete renderer;
+    return false;
+  }
+
+  Renderer::instance = renderer;
+  return true;
 }
 
-void Renderer::shutdown() {
+void Renderer::quit() {
   if (Renderer::instance == nullptr) {
     return;
   }

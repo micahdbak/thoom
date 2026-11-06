@@ -7,7 +7,6 @@
 #include <string>
 #include <thread>
 
-#include "macros.h"
 #include "peer_connection.h"
 #include "peer_signaller.h"
 
@@ -46,12 +45,11 @@ class Peer {
 
   inline static Peer* instance = nullptr;
 
-  static void init(bool offerer);
-  static void shutdown();
+  static bool init(bool offerer);
+  static void quit();
 
   Peer(bool offerer);
   ~Peer();
-  DISALLOW_COPY_AND_MOVE(Peer);
 
   std::string get_connection_code();
   void set_connection_code(std::string code);

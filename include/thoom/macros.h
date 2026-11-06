@@ -1,4 +1,9 @@
-#pragma once
+#ifndef THOOM_MACROS_H
+#define THOOM_MACROS_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define THOOM_CLAMP(_x, _min, _max) \
   ((_x) < (_min) ? (_min) : ((_x) > (_max) ? (_max) : (_x)))
@@ -20,8 +25,12 @@
 #define THOOM_PI_F 3.141592653589793f
 #define THOOM_PI_D 3.141592653589793
 
-#define DISALLOW_COPY_AND_MOVE(class_name)           \
-  class_name(const class_name&) = delete;            \
-  class_name& operator=(const class_name&) = delete; \
-  class_name(class_name&&) = delete;                 \
-  class_name& operator=(class_name&&) = delete
+#define THOOM_STR_(_x) #_x
+#define THOOM_STR(_x) THOOM_STR_(_x)
+#define THOOM_LOG __FILE__ ":" THOOM_STR(__LINE__) ": "
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

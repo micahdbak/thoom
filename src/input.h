@@ -3,7 +3,6 @@
 #include <SDL3/SDL.h>
 
 #include "controller.h"
-#include "macros.h"
 
 namespace thoom {
 
@@ -16,12 +15,11 @@ class Input {
 
   inline static Input* instance = nullptr;
 
-  static void init();
-  static void shutdown();
+  static bool init();
+  static void quit();
 
   Input();
   ~Input();
-  DISALLOW_COPY_AND_MOVE(Input);
 
   void handle_key_event(const SDL_Event& event);
   void clear_hit_input();

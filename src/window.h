@@ -3,7 +3,6 @@
 #include <SDL3/SDL.h>
 
 #include "colour.h"
-#include "macros.h"
 
 namespace thoom {
 
@@ -14,12 +13,11 @@ class Window {
  public:
   inline static Window* instance = nullptr;
 
-  static void init(const char* title, int screen_width, int screen_height);
-  static void shutdown();
+  static bool init(const char* title, int screen_width, int screen_height);
+  static void quit();
 
   Window(const char* title, int screen_width, int screen_height);
   ~Window();
-  DISALLOW_COPY_AND_MOVE(Window);
 
   void set_title(const char* title);
   void update_screen_scale();
@@ -34,6 +32,10 @@ class Window {
   SDL_Texture* screen = nullptr;
   int screen_width = 0, screen_height = 0;
   SDL_FRect screen_rect = {};
+
+ private:
+  bool ready = false;
+  bool sdl_initialized = false;
 };
 
 };  // namespace thoom

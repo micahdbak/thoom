@@ -2,17 +2,23 @@
 
 #include <SDL3/SDL.h>
 
-#include <cstdlib>
-#include <iostream>
+#include <cstdio>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "texture.h"
+#include "thoom/macros.h"
 
 namespace thoom {
 
-void Font::load_fonts(std::vector<Font*>& fonts) {
+bool Font::load_fonts(std::vector<Font*>& fonts) {
+  if (Texture::instance == nullptr) {
+    fprintf(stderr,
+            THOOM_LOG "Font::load_fonts error: texture not initialized\n");
+    return false;
+  }
+
   // MONO_FONT = 0
   fonts.push_back(new Font("fonts/mono.bmp", 6, 10, 6, {}));
 
@@ -68,15 +74,28 @@ void Font::load_fonts(std::vector<Font*>& fonts) {
 
   // CONTROLS_FONT = 6
   fonts.push_back(new Font("fonts/controls.bmp", 8, 16, 8, {{'/', 5}}));
+
+  for (Font* font : fonts) {
+    if (font->texture == nullptr) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 Font::Font(const char* font_path, int w, int h, int default_w,
            const std::unordered_map<char, int>& special_w) {
+  if (Texture::instance == nullptr) {
+    fprintf(stderr, THOOM_LOG "Font::Font error: texture not initialized\n");
+    return;
+  }
+
   SDL_Surface* font_surface = SDL_LoadBMP(font_path);
   if (font_surface == nullptr) {
-    std::cerr << "Font::Font error: '" << font_path << "' does not exist."
-              << std::endl;
-    exit(1);
+    fprintf(stderr, THOOM_LOG "Font::Font error: '%s' does not exist.\n",
+            font_path);
+    return;
   }
 
   this->texture = Texture::instance->create_texture_from_surface(

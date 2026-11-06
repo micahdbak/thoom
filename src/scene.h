@@ -6,7 +6,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "macros.h"
 #include "map.h"
 #include "object.h"
 
@@ -29,13 +28,12 @@ class Scene {
 
   inline static Scene* instance = nullptr;
 
-  static void init(const std::string& initial_map = "",
+  static bool init(const std::string& initial_map = "",
                    bool create_objects = true);
-  static void shutdown();
+  static void quit();
 
   Scene(const std::string& initial_map = "", bool create_objects = true);
   ~Scene();
-  DISALLOW_COPY_AND_MOVE(Scene);
 
   void register_object(const ObjectDef& def);
   void register_objects(const ObjectDef* defs);

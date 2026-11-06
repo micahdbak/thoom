@@ -2,14 +2,15 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <vector>
 
 #include "colour.h"
 #include "renderer.h"
 #include "texture.h"
+#include "thoom/macros.h"
 #include "tilesheet.h"
 
 namespace thoom {
@@ -27,7 +28,7 @@ MapLayer::MapLayer(int cols, int rows, int tile_width, int tile_height,
       SDL_SCALEMODE_LINEAR);
 
   if (this->texture == nullptr) {
-    std::cerr << "SDL_CreateTexture error: " << SDL_GetError() << std::endl;
+    fprintf(stderr, THOOM_LOG "SDL_CreateTexture error: %s\n", SDL_GetError());
     exit(1);
   }
 

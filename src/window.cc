@@ -2,10 +2,10 @@
 
 #include <SDL3/SDL.h>
 
-#include <cstdlib>
-#include <iostream>
+#include <cstdio>
 
 #include "colour.h"
+#include "thoom/macros.h"
 
 #if defined(__SANITIZE_ADDRESS__) || \
     (defined(__has_feature) && __has_feature(address_sanitizer))
@@ -19,16 +19,25 @@
 
 namespace thoom {
 
-void Window::init(const char* title, int screen_width, int screen_height) {
+bool Window::init(const char* title, int screen_width, int screen_height) {
   if (Window::instance != nullptr) {
-    std::cerr << "Window::init error: window already initialized" << std::endl;
-    std::exit(1);
+    fprintf(stderr,
+            THOOM_LOG "Window::init error: window already initialized\n");
+    return false;
   }
 
-  Window::instance = new Window(title, screen_width, screen_height);
+  Window* window = new Window(title, screen_width, screen_height);
+
+  if (!window->ready) {
+    delete window;
+    return false;
+  }
+
+  Window::instance = window;
+  return true;
 }
 
-void Window::shutdown() {
+void Window::quit() {
   if (Window::instance == nullptr) {
     return;
   }
@@ -46,9 +55,11 @@ Window::Window(const char* title, int screen_width, int screen_height)
   LSAN_ENABLE();
 
   if (!sdl_init) {
-    std::cerr << "SDL_Init error: " << SDL_GetError() << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG "SDL_Init error: %s\n", SDL_GetError());
+    return;
   }
+
+  this->sdl_initialized = true;
 
   int window_width = screen_width * 2;
   int window_height = screen_height * 2;
@@ -56,13 +67,13 @@ Window::Window(const char* title, int screen_width, int screen_height)
   if (!SDL_CreateWindowAndRenderer(title, window_width, window_height,
                                    SDL_WINDOW_RESIZABLE, &this->sdl_window,
                                    &this->sdl_renderer)) {
-    std::cerr << "SDL_CreateWindowAndRenderer error: " << SDL_GetError()
-              << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG "SDL_CreateWindowAndRenderer error: %s\n",
+            SDL_GetError());
+    return;
   }
 
-  std::cout << "Renderer backend: " << SDL_GetRendererName(this->sdl_renderer)
-            << std::endl;
+  printf(THOOM_LOG "Renderer backend: %s\n",
+         SDL_GetRendererName(this->sdl_renderer));
 
   SDL_SetRenderVSync(this->sdl_renderer, 1);
 
@@ -71,26 +82,36 @@ Window::Window(const char* title, int screen_width, int screen_height)
                         SDL_TEXTUREACCESS_TARGET, screen_width, screen_height);
 
   if (this->screen == nullptr) {
-    std::cerr << "SDL_CreateTexture error: " << SDL_GetError() << std::endl;
-    std::exit(1);
+    fprintf(stderr, THOOM_LOG "SDL_CreateTexture error: %s\n", SDL_GetError());
+    return;
   }
 
   SDL_SetTextureScaleMode(this->screen, SDL_SCALEMODE_NEAREST);
 
   this->update_screen_scale();
+  this->ready = true;
 }
 
 Window::~Window() {
-  SDL_DestroyTexture(this->screen);
-  this->screen = nullptr;
+  if (this->screen != nullptr) {
+    SDL_DestroyTexture(this->screen);
+    this->screen = nullptr;
+  }
 
-  SDL_DestroyRenderer(this->sdl_renderer);
-  this->sdl_renderer = nullptr;
+  if (this->sdl_renderer != nullptr) {
+    SDL_DestroyRenderer(this->sdl_renderer);
+    this->sdl_renderer = nullptr;
+  }
 
-  SDL_DestroyWindow(this->sdl_window);
-  this->sdl_window = nullptr;
+  if (this->sdl_window != nullptr) {
+    SDL_DestroyWindow(this->sdl_window);
+    this->sdl_window = nullptr;
+  }
 
-  SDL_Quit();
+  if (this->sdl_initialized) {
+    SDL_Quit();
+    this->sdl_initialized = false;
+  }
 }
 
 void Window::set_title(const char* title) {
@@ -130,14 +151,14 @@ void Window::save_screenshot(const char* file_path) {
 
   SDL_Surface* screenshot = SDL_RenderReadPixels(this->sdl_renderer, NULL);
   if (screenshot == nullptr) {
-    std::cerr << "Window::save_screenshot error: " << SDL_GetError()
-              << std::endl;
+    fprintf(stderr, THOOM_LOG "Window::save_screenshot error: %s\n",
+            SDL_GetError());
     return;
   }
 
   if (!SDL_SaveBMP(screenshot, file_path)) {
-    std::cerr << "Window::save_screenshot error: " << SDL_GetError()
-              << std::endl;
+    fprintf(stderr, THOOM_LOG "Window::save_screenshot error: %s\n",
+            SDL_GetError());
   }
 
   SDL_DestroySurface(screenshot);
@@ -164,7 +185,8 @@ SDL_Surface* Window::read_pixels(SDL_Texture* texture) {
   SDL_SetRenderTarget(this->sdl_renderer, this->screen);
 
   if (surface == nullptr) {
-    std::cerr << "Window::read_pixels error: " << SDL_GetError() << std::endl;
+    fprintf(stderr, THOOM_LOG "Window::read_pixels error: %s\n",
+            SDL_GetError());
   }
 
   return surface;
