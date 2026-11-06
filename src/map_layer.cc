@@ -17,6 +17,11 @@ namespace thoom {
 
 MapLayer::MapLayer(int cols, int rows, int tile_width, int tile_height,
                    Colour clear_colour) {
+  this->cols = cols;
+  this->rows = rows;
+  this->tile_width = tile_width;
+  this->tile_height = tile_height;
+
   size_t nbytes = sizeof(std::vector<Tile>*) * cols * rows;
   this->tiles = (std::vector<Tile>**)malloc(nbytes);
 
@@ -35,12 +40,11 @@ MapLayer::MapLayer(int cols, int rows, int tile_width, int tile_height,
   Renderer::instance->clear(this->texture, clear_colour);
 
   this->clear_colour = clear_colour;
-  this->count = cols * rows;
 }
 
 MapLayer::~MapLayer() {
   if (this->tiles != nullptr) {
-    for (int coord = 0; coord < this->count; coord++) {
+    for (int coord = 0; coord < this->cols * this->rows; coord++) {
       std::vector<Tile>* vec = this->tiles[coord];
       if (vec != nullptr) delete vec;
     }
@@ -54,10 +58,50 @@ MapLayer::~MapLayer() {
     this->texture = nullptr;
   }
 
-  this->count = 0;
+  this->cols = 0;
+  this->rows = 0;
 }
 
-void MapLayer::add_tile(int coord, Tile tile) {
+int MapLayer::coord(int x, int y) const {
+  if (x < 0 || y < 0 || x >= this->cols || y >= this->rows) {
+    return -1;
+  }
+
+  return (y * this->cols) + x;
+}
+
+bool MapLayer::has_tiles(int x, int y) const {
+  std::vector<Tile>* vec = this->tiles_at(x, y);
+  return vec != nullptr && !vec->empty();
+}
+
+std::vector<Tile>* MapLayer::tiles_at(int x, int y) const {
+  int coord = this->coord(x, y);
+
+  if (coord < 0) {
+    return nullptr;
+  }
+
+  return this->tiles[coord];
+}
+
+int MapLayer::tile_count(int x, int y) const {
+  std::vector<Tile>* vec = this->tiles_at(x, y);
+
+  if (vec == nullptr) {
+    return 0;
+  }
+
+  return int(vec->size());
+}
+
+bool MapLayer::add_tile(int x, int y, Tile tile) {
+  int coord = this->coord(x, y);
+
+  if (coord < 0) {
+    return false;
+  }
+
   std::vector<Tile>* vec = this->tiles[coord];
 
   if (vec == nullptr) {
@@ -66,31 +110,110 @@ void MapLayer::add_tile(int coord, Tile tile) {
   }
 
   vec->push_back(tile);
+  return true;
 }
 
-void MapLayer::render_tile(int x, int y, int cols, int tile_width,
-                           int tile_height,
+bool MapLayer::place_tile(int x, int y, Tile tile) {
+  std::vector<Tile>* vec = this->tiles_at(x, y);
+
+  if (vec != nullptr && !vec->empty()) {
+    Tile top = vec->back();
+
+    if (top.tilesheet == tile.tilesheet && top.x == tile.x && top.y == tile.y) {
+      return false;
+    }
+  }
+
+  return this->add_tile(x, y, tile);
+}
+
+bool MapLayer::remove_tile(int x, int y) {
+  int coord = this->coord(x, y);
+
+  if (coord < 0) {
+    return false;
+  }
+
+  std::vector<Tile>* vec = this->tiles[coord];
+
+  if (vec == nullptr || vec->empty()) {
+    return false;
+  }
+
+  vec->pop_back();
+
+  if (vec->empty()) {
+    delete vec;
+    this->tiles[coord] = nullptr;
+  }
+
+  return true;
+}
+
+void MapLayer::clear_tile(int x, int y) {
+  int coord = this->coord(x, y);
+
+  if (coord < 0) {
+    return;
+  }
+
+  std::vector<Tile>* vec = this->tiles[coord];
+
+  if (vec != nullptr) {
+    delete vec;
+    this->tiles[coord] = nullptr;
+  }
+}
+
+bool MapLayer::fill_randomly(std::vector<Tile> tiles) {
+  if (tiles.empty()) {
+    return false;
+  }
+
+  for (int coord = 0; coord < this->cols * this->rows; coord++) {
+    std::vector<Tile>* vec = this->tiles[coord];
+
+    if (vec == nullptr) {
+      vec = new std::vector<Tile>();
+      this->tiles[coord] = vec;
+    } else {
+      vec->clear();
+    }
+
+    vec->push_back(tiles[SDL_rand(int(tiles.size()))]);
+  }
+
+  return true;
+}
+
+void MapLayer::render_tile(int x, int y,
                            const std::vector<Tilesheet*>& tilesheets) const {
+  int coord = this->coord(x, y);
+
+  if (coord < 0) {
+    return;
+  }
+
   SDL_FRect dst_rect;
-  dst_rect.x = float(tile_width * x);
-  dst_rect.y = float(tile_width * y);
-  dst_rect.w = float(tile_width);
-  dst_rect.h = float(tile_height);
+  dst_rect.x = float(this->tile_width * x);
+  dst_rect.y = float(this->tile_height * y);
+  dst_rect.w = float(this->tile_width);
+  dst_rect.h = float(this->tile_height);
 
   Renderer::instance->draw_rect(this->texture, &dst_rect, this->clear_colour,
                                 SDL_BLENDMODE_NONE);
 
-  std::vector<Tile>* vec = this->tiles[(y * cols) + x];
+  std::vector<Tile>* vec = this->tiles[coord];
   if (vec == nullptr) return;
 
   SDL_FRect src_rect;
-  src_rect.w = float(tile_width);
-  src_rect.h = float(tile_height);
+  src_rect.w = float(this->tile_width);
+  src_rect.h = float(this->tile_height);
 
   // render all tiles in order
   for (auto tile : *vec) {
-    src_rect.x = float(tile_width * tile.x);
-    src_rect.y = float(tile_height * tile.y);
+    src_rect.x = float(this->tile_width * tile.x);
+    src_rect.y = float(this->tile_height * tile.y);
     Renderer::instance->draw_texture(this->texture,
                                      tilesheets[tile.tilesheet]->texture,
                                      &src_rect, &dst_rect);

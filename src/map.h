@@ -25,9 +25,17 @@ class Map {
 
   void write(const char* map_path) const;
 
+  bool has_tiles(int x, int y) const;
+  bool add_region(int layer, int x, int y, int tilesheet, int src_x, int src_y,
+                  int src_w, int src_h);
+
+  bool add_tilesheet(const char* path);
+  bool remove_tilesheet(int index);
+
+  bool add_object(const ObjectRequest& object);
+  bool remove_object(int index);
+
   void render_tile(int x, int y) const;
-  static void make_map_rect(int x, int y, int w, int h, SDL_FRect* src_rect,
-                            SDL_FRect* dst_rect);
 
   std::string path = "";
   std::string title = "Unnamed map", description = "Floor 1";

@@ -72,6 +72,9 @@ class Collider {
   Collider(int tile_width, int tile_height, int cols, int rows);
   ~Collider();
 
+  int get(int x, int y) const;
+  bool set(int x, int y, int collider);
+
   bool point_in_collider(float x, float y) const;
   bool in_sight(int x0, int y0, int x1, int y1, int* next_x, int* next_y) const;
   void random_target(int x, int y, int* next_x, int* next_y) const;
