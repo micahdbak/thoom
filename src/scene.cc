@@ -221,6 +221,9 @@ void Scene::load_map(const std::string& path, bool create_objects) {
   this->map = new Map(path.c_str());
   Audio::instance->loop(this->map->ambience);
 
+  // Objects may set the view while they are created.
+  Renderer::instance->reset_view();
+
   if (create_objects) {
     for (const ObjectRequest& object : this->map->objects) {
       this->create_object(object.id, object.options);
@@ -234,8 +237,6 @@ void Scene::load_map(const std::string& path, bool create_objects) {
   if (save.geti(LOAD_SAVE) == 1) save.data.erase(LOAD_SAVE);
 
   save.data[LOAD_MAP] = this->map->path;
-
-  Renderer::instance->reset_view();
 }
 
 void Scene::unload() {
