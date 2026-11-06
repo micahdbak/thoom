@@ -73,7 +73,7 @@ void MapLayer::render_tile(int x, int y, int cols, int tile_width,
                            const std::vector<Tilesheet*>& tilesheets) const {
   SDL_FRect dst_rect;
   dst_rect.x = float(tile_width * x);
-  dst_rect.y = float(tile_width * y);
+  dst_rect.y = float(tile_height * y);
   dst_rect.w = float(tile_width);
   dst_rect.h = float(tile_height);
 

@@ -34,6 +34,8 @@ bool Renderer::init() {
     return false;
   }
 
+  // A zero view offsets sprites by half a screen until a map load resets it.
+  renderer->reset_view();
   Renderer::instance = renderer;
   return true;
 }

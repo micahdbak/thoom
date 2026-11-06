@@ -84,7 +84,7 @@ bool Collider::point_in_collider(float x, float y) const {
   Quad quad = this->quads[this->collision[coord]];
   SDL_FPoint point;
   point.x = x - float(_x * this->tile_width);
-  point.y = y - float(_y * this->tile_width);
+  point.y = y - float(_y * this->tile_height);
 
   // return true if the point lies in either triangles making up the collider's
   // quad
@@ -97,7 +97,7 @@ bool Collider::point_in_collider(float x, float y) const {
 bool Collider::in_sight(int x0, int y0, int x1, int y1, int* next_x,
                         int* next_y) const {
   x0 = x0 / this->tile_width;
-  y0 = y0 / this->tile_width;
+  y0 = y0 / this->tile_height;
   x1 = x1 / this->tile_width;
   y1 = y1 / this->tile_height;
 
