@@ -43,10 +43,13 @@ class Scene {
   void request_map(const std::string& path, bool create_objects = true);
 
   void create_object(const std::string& id, const std::string& options);
-  Object* find_object(thoom_lid lid);
+
   void register_gid_object(Object* object);
   void unregister_gid_object(Object* object);
+
+  Object* find_object(thoom_lid lid);
   Object* find_gid_object(thoom_gid gid);
+
   void save_objects();
 
   void step();
@@ -63,12 +66,13 @@ class Scene {
     bool create_objects = true;
   };
 
+  void tick();
+  void destroy_object(Object* object);
+
   void load_map(const std::string& path, bool create_objects);
   void unload();
-  void clean_up_objects(std::vector<Object*>& objects);
+
   void create_new_objects();
-  void tick();
-  void step_objects();
   Object* spawn_object(const ObjectDef& def, const std::string& options);
 
   MapRequest next_map;
@@ -77,9 +81,7 @@ class Scene {
   uint64_t accumulator = 0;
   uint64_t tick_fraction = 0;
 
-  std::vector<Object*> first_objects;
-  std::vector<Object*> objects;
-  std::vector<Object*> last_objects;
+  std::vector<Object*> object_lists[kObjectLast + 1];
   std::unordered_map<thoom_lid, Object*> objects_by_lid;
   std::unordered_map<thoom_gid, Object*> objects_by_gid;
   std::unordered_map<std::string, ObjectDef> factories;

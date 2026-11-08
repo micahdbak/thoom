@@ -25,6 +25,7 @@ class Object {
   virtual ~Object() = default;
 
   virtual void step() = 0;
+  virtual void render() {}
   virtual void save_data() {}
 
   thoom_lid lid;

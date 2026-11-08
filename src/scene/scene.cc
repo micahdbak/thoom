@@ -60,22 +60,13 @@ Scene::~Scene() {
 
   this->state = Scene::kUnloading;
 
-  for (Object* object : this->first_objects) {
-    this->objects_by_lid.erase(object->lid);
-    this->unregister_gid_object(object);
-    delete object;
-  }
+  for (std::vector<Object*>& objects : this->object_lists) {
+    for (Object* object : objects) {
+      this->destroy_object(object);
+    }
 
-  for (Object* object : this->last_objects) {
-    this->objects_by_lid.erase(object->lid);
-    this->unregister_gid_object(object);
-    delete object;
+    objects.clear();
   }
-
-  this->first_objects.clear();
-  this->last_objects.clear();
-  this->objects_by_lid.clear();
-  this->objects_by_gid.clear();
 
   this->state = Scene::kIdle;
 
@@ -140,17 +131,6 @@ void Scene::create_object(const std::string& id, const std::string& options) {
   this->spawn_object(it->second, options);
 }
 
-Object* Scene::find_object(thoom_lid lid) {
-  std::unordered_map<thoom_lid, Object*>::iterator it =
-      this->objects_by_lid.find(lid);
-
-  if (it == this->objects_by_lid.end()) {
-    return nullptr;
-  }
-
-  return it->second;
-}
-
 void Scene::register_gid_object(Object* object) {
   if (object == nullptr) {
     return;
@@ -192,11 +172,22 @@ void Scene::unregister_gid_object(Object* object) {
   this->objects_by_gid.erase(object->gid);
 }
 
+Object* Scene::find_object(thoom_lid lid) {
+  std::unordered_map<thoom_lid, Object*>::iterator it =
+      this->objects_by_lid.find(lid);
+
+  if (it == this->objects_by_lid.end() || it->second->deleted) {
+    return nullptr;
+  }
+
+  return it->second;
+}
+
 Object* Scene::find_gid_object(thoom_gid gid) {
   std::unordered_map<thoom_gid, Object*>::iterator it =
       this->objects_by_gid.find(gid);
 
-  if (it == this->objects_by_gid.end()) {
+  if (it == this->objects_by_gid.end() || it->second->deleted) {
     return nullptr;
   }
 
@@ -204,9 +195,9 @@ Object* Scene::find_gid_object(thoom_gid gid) {
 }
 
 void Scene::save_objects() {
-  for (Object* object : this->first_objects) object->save_data();
-  for (Object* object : this->objects) object->save_data();
-  for (Object* object : this->last_objects) object->save_data();
+  for (std::vector<Object*>& objects : this->object_lists) {
+    for (Object* object : objects) object->save_data();
+  }
 }
 
 void Scene::step() {
@@ -254,35 +245,47 @@ void Scene::tick() {
     this->ticks += 1;
   }
 
-  this->step_objects();
-}
-
-void Scene::step_objects() {
   Renderer::instance->sprites.clear();
 
-  for (Object* object : this->first_objects) {
-    if (!object->deleted) object->step();
+  // step all objects which should be simulated locally
+  for (std::vector<Object*>& objects : this->object_lists) {
+    for (Object* object : objects) {
+      if (object->deleted) continue;
+      if (object->replicated && object->owner_pid != this->local_pid) continue;
+
+      object->step();
+    }
   }
-
-  this->clean_up_objects(this->first_objects);
-
-  for (Object* object : this->objects) {
-    if (!object->deleted) object->step();
-  }
-
-  this->clean_up_objects(this->objects);
 
   this->create_new_objects();
 
-  this->clean_up_objects(this->first_objects);
-  this->clean_up_objects(this->objects);
-  this->clean_up_objects(this->last_objects);
-
-  for (Object* object : this->last_objects) {
-    if (!object->deleted) object->step();
+  // render all objects (even non-owned ones)
+  for (std::vector<Object*>& objects : this->object_lists) {
+    for (Object* object : objects) {
+      if (!object->deleted) object->render();
+    }
   }
 
-  this->clean_up_objects(this->last_objects);
+  // destroy any objects that were marked for deletion
+  for (std::vector<Object*>& objects : this->object_lists) {
+    std::vector<Object*>::iterator it = objects.begin();
+
+    while (it != objects.end()) {
+      if (!(*it)->deleted) {
+        it++;
+        continue;
+      }
+
+      this->destroy_object(*it);
+      it = objects.erase(it);
+    }
+  }
+}
+
+void Scene::destroy_object(Object* object) {
+  this->objects_by_lid.erase(object->lid);
+  this->unregister_gid_object(object);
+  delete object;
 }
 
 void Scene::load_map(const std::string& path, bool create_objects) {
@@ -325,36 +328,18 @@ void Scene::unload() {
 
   while (!this->new_objects.empty()) this->new_objects.pop();
 
-  for (Object* object : this->objects) {
-    this->objects_by_lid.erase(object->lid);
-    this->unregister_gid_object(object);
-    delete object;
+  // Normal objects belong to the map. Objects in the first and last lists
+  // outlive it, so a map change does not remove session objects.
+  for (Object* object : this->object_lists[kObjectNormal]) {
+    this->destroy_object(object);
   }
 
-  this->objects.clear();
+  this->object_lists[kObjectNormal].clear();
 
   delete this->map;
   this->map = nullptr;
 
   this->state = Scene::kIdle;
-}
-
-void Scene::clean_up_objects(std::vector<Object*>& objects) {
-  std::vector<Object*>::iterator it = objects.begin();
-
-  while (it != objects.end()) {
-    Object* object = *it;
-
-    if (!object->deleted) {
-      it++;
-      continue;
-    }
-
-    this->objects_by_lid.erase(object->lid);
-    this->unregister_gid_object(object);
-    delete object;
-    it = objects.erase(it);
-  }
 }
 
 void Scene::create_new_objects() {
@@ -400,17 +385,7 @@ Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
     object->owner_pid = this->local_pid;
   }
 
-  switch (def.order) {
-    case kObjectFirst:
-      this->first_objects.push_back(object);
-      break;
-    case kObjectLast:
-      this->last_objects.push_back(object);
-      break;
-    default:
-      this->objects.push_back(object);
-      break;
-  }
+  this->object_lists[def.order].push_back(object);
 
   this->objects_by_lid[object->lid] = object;
   this->register_gid_object(object);
