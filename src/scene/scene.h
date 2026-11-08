@@ -48,7 +48,7 @@ class Scene {
 
   State state = kIdle;
   uint64_t ticks = 0;
-  float delta = 0.0f;
+  float delta = 1.0f / 60.0f;  // simulation time
   Map* map = nullptr;
 
  private:
@@ -61,8 +61,14 @@ class Scene {
   void unload();
   void clean_up_objects(std::vector<Object*>& objects);
   void create_new_objects();
+  void tick();
+  void step_objects();
 
   MapRequest next_map;
+
+  uint64_t last_frame_ns = 0;
+  uint64_t accumulator = 0;
+  uint64_t tick_fraction = 0;
 
   std::vector<Object*> first_objects;
   std::vector<Object*> objects;

@@ -103,7 +103,7 @@ void Hud::render() {
 
   if (current_map != this->current_map) {
     this->current_map = current_map;
-    Renderer::instance->clear(this->ui, kMask);
+
     if (Scene::instance->map != nullptr) {
       this->display_notification(Scene::instance->map->title + ", " +
                                  Scene::instance->map->description);

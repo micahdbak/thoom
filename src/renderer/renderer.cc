@@ -609,8 +609,6 @@ void Renderer::draw_sprites() {
                          sprite.src_rect, &dst_rect);
     }
   }
-
-  this->sprites.clear();  // clear sprites; next frame will repopulate
 }
 
 bool Renderer::build_collision_quad(Map* map, const SDL_FRect* src_rect,
