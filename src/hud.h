@@ -21,6 +21,8 @@ class Hud {
   ~Hud();
 
   void render();
+  void draw();
+
   void display_notification(const std::string& text);
 
   SDL_Texture* ui = nullptr;

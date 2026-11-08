@@ -137,6 +137,14 @@ void Hud::render() {
   this->draw_notification(force_render);
 }
 
+void Hud::draw() {
+  thoom::Renderer::instance->draw_texture(thoom::Window::instance->screen,
+                                          thoom::Hud::instance->ui, NULL, NULL);
+  thoom::Renderer::instance->draw_texture(thoom::Window::instance->screen,
+                                          thoom::Hud::instance->overlay, NULL,
+                                          NULL);
+}
+
 void Hud::display_notification(const std::string& text) {
   this->notification = text;
   this->notif_ticks = Scene::instance->ticks;
