@@ -3,14 +3,10 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
-#include <queue>
 #include <string>
-#include <thread>
 
-#include "peer/peer_connection.h"
-#include "peer/peer_signaller.h"
-
-namespace thoom {
+#include "peer/message_queue.h"
+#include "thoom/thoom.h"
 
 // shared message codes between cheddar and feta
 
@@ -36,6 +32,11 @@ namespace thoom {
 #define MSG_MAX_SPEED 'k'
 #define MSG_COLLISION 'l'
 
+namespace thoom {
+
+// forward declared as peer_*.h includes libdatachannel headers
+class PeerThread;
+
 class Peer {
  public:
   static constexpr uint64_t kStateNoConnection = 0;
@@ -51,48 +52,28 @@ class Peer {
   Peer(bool offerer);
   ~Peer();
 
+  void set_offerer(bool offerer);
+
+  thoom_pid get_pid() const;
+  void set_pid(thoom_pid pid);
+
+  uint64_t get_state() const;
+  void set_state(uint64_t state);
+
   std::string get_connection_code();
   void set_connection_code(std::string code);
 
-  std::string next_message();
-  std::string last_message();
-  std::queue<std::string> all_messages();
-  void send_message(std::string message);
-
-  void set_offerer(bool offerer);
-
-  std::atomic<uint64_t> state{kStateNoConnection};
+  MessageQueue send_queue;
+  MessageQueue recv_queue;
 
  private:
-  bool should_stop();
-
-  void start_over();
-  void no_connection();
-  void waiting_for_peer();
-  void connected();
-  void message_loop();
-  void push_message(std::string message);
-
-  std::atomic<bool> offerer{false};
-  std::atomic<bool> ready{false};
-  std::thread* message_thread = nullptr;
-
-  bool stop_message_loop = false;
-  std::mutex stop_message_loop_mutex;
+  std::atomic<thoom_pid> pid{THOOM_PID_HOST};
+  std::atomic<uint64_t> state{kStateNoConnection};
 
   std::string connection_code;
   std::mutex connection_code_mutex;
 
-  std::queue<std::string> received_messages;
-  std::mutex received_messages_mutex;
-
-  std::queue<std::string> send_messages;
-  std::mutex send_messages_mutex;
-
-  // Only used by message_thread.
-  PeerConnection connection;
-  PeerSignaller signaller;
-  bool got_ping = false;
+  PeerThread* thread = nullptr;
 };
 
 };  // namespace thoom

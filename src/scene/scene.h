@@ -8,6 +8,7 @@
 
 #include "map/map.h"
 #include "object.h"
+#include "thoom/thoom.h"
 
 namespace thoom {
 
@@ -41,7 +42,10 @@ class Scene {
   void request_map(const std::string& path, bool create_objects = true);
 
   void create_object(const std::string& id, const std::string& options);
-  Object* find_object(int id);
+  Object* find_object(thoom_lid lid);
+  void register_gid_object(Object* object);
+  void unregister_gid_object(Object* object);
+  Object* find_gid_object(thoom_gid gid);
   void save_objects();
 
   void step();
@@ -50,6 +54,7 @@ class Scene {
   uint64_t ticks = 0;
   float delta = 1.0f / 60.0f;  // simulation time
   Map* map = nullptr;
+  thoom_pid local_pid = THOOM_PID_HOST;
 
  private:
   struct MapRequest {
@@ -73,7 +78,8 @@ class Scene {
   std::vector<Object*> first_objects;
   std::vector<Object*> objects;
   std::vector<Object*> last_objects;
-  std::unordered_map<int, Object*> objects_by_id;
+  std::unordered_map<thoom_lid, Object*> objects_by_lid;
+  std::unordered_map<thoom_gid, Object*> objects_by_gid;
   std::unordered_map<std::string, ObjectDef> factories;
   std::queue<ObjectRequest> new_objects;
 };

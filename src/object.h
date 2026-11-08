@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "thoom/thoom.h"
+
 namespace thoom {
 
 enum ObjectOrder {
@@ -12,17 +14,23 @@ enum ObjectOrder {
 
 class Object {
  public:
-  Object() : id(next_id++) {}
+  Object() : lid(next_lid++) {}
   virtual ~Object() = default;
 
   virtual void step() = 0;
   virtual void save_data() {}
 
-  int id;
+  thoom_lid lid;
+  thoom_gid gid = THOOM_GID_NULL;
+
+  thoom_pid owner_pid = THOOM_PID_INVALID;
+  bool fixed_owner = false;
+  bool replicated = false;
+
   bool deleted = false;
 
  private:
-  inline static int next_id = 0;
+  inline static thoom_lid next_lid = 0;
 };
 
 struct ObjectRequest {

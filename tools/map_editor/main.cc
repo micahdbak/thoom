@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <string>
@@ -68,6 +69,8 @@ int main(int argc, char** argv) {
     }
 
     thoom::Audio::instance->step();
+
+    uint64_t ticks = thoom::Scene::instance->ticks;
     thoom::Scene::instance->step();
 
     thoom::Map* map = thoom::Scene::instance->map;
@@ -82,7 +85,9 @@ int main(int argc, char** argv) {
     thoom::Colour bg = map != nullptr ? map->background : thoom::kBlack;
     thoom::Window::instance->present(bg);
 
-    thoom::Input::instance->clear_hit_input();
+    if (thoom::Scene::instance->ticks != ticks) {
+      thoom::Input::instance->clear_hit_input();
+    }
   }
 
   thoom::Scene::quit();

@@ -11,9 +11,9 @@
 #include "texture/texture.h"
 #include "window/window.h"
 
-bool thoom_init(const char* title, unsigned int screen_width,
-                unsigned int screen_height, bool peer, bool offerer,
-                unsigned long background, const struct hud_def* def) {
+bool thoom_init(const char* title, uint32_t screen_width,
+                uint32_t screen_height, bool peer, bool offerer,
+                uint32_t background, const struct hud_def* def) {
   struct hud_def default_def = {};
   const struct hud_def& hud = def != nullptr ? *def : default_def;
 
@@ -41,7 +41,7 @@ bool thoom_init(const char* title, unsigned int screen_width,
     goto quit_input;
   }
 
-  if (!thoom::Hud::init(static_cast<uint32_t>(background), hud)) {
+  if (!thoom::Hud::init(background, hud)) {
     goto quit_peer;
   }
 
