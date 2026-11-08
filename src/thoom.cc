@@ -3,13 +3,13 @@
 #include <cstdint>
 
 #include "SDL3/SDL.h"
-#include "audio.h"
-#include "hud.h"
-#include "input.h"
-#include "peer.h"
-#include "renderer.h"
-#include "texture.h"
-#include "window.h"
+#include "audio/audio.h"
+#include "hud/hud.h"
+#include "input/input.h"
+#include "peer/peer.h"
+#include "renderer/renderer.h"
+#include "texture/texture.h"
+#include "window/window.h"
 
 bool thoom_init(const char* title, unsigned int screen_width,
                 unsigned int screen_height, bool offerer,

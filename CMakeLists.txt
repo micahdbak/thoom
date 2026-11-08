@@ -37,37 +37,45 @@ endif()
 add_subdirectory(deps/libdatachannel EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
-add_library(thoom
-  src/audio.cc
-  src/texture.cc
-  src/collider.cc
-  src/controller.cc
-  src/font.cc
-  src/hud.cc
-  src/input.cc
+include_directories(
+  ${PROJECT_SOURCE_DIR}/src
+  ${PROJECT_SOURCE_DIR}/include)
 
-  src/scene.cc
-  src/map.cc
-  src/map_layer.cc
-  src/peer.cc
-  src/peer_connection.cc
-  src/peer_signaller.cc
-  src/renderer.cc
-  src/save_data.cc
-  src/sprite.cc
-  src/thoom.cc
-  src/tilesheet.cc
-  src/utils.cc
-  src/window.cc
-)
+if(NOT WIN32)
+  add_compile_options(
+      $<$<CONFIG:Debug>:-fsanitize=address>
+      $<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
+  add_link_options(
+      $<$<CONFIG:Debug>:-fsanitize=address>)
+endif()
+
+add_subdirectory(src)
+
+add_library(thoom
+  src/thoom.cc)
 
 target_include_directories(thoom
-  PUBLIC include
-  PUBLIC src)
+  PUBLIC
+    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/include)
 
 target_link_libraries(thoom
-  PUBLIC LibDataChannel::LibDataChannel SDL3::SDL3
-  PRIVATE sanitizers)
+  PUBLIC
+    thoom_audio
+    thoom_hud
+    thoom_input
+    thoom_map
+    thoom_peer
+    thoom_renderer
+    thoom_save
+    thoom_scene
+    thoom_sprite
+    thoom_texture
+    thoom_utils
+    thoom_window
+    SDL3::SDL3
+  PRIVATE
+    LibDataChannel::LibDataChannel)
 
 if(WIN32)
   add_custom_command(TARGET thoom POST_BUILD
