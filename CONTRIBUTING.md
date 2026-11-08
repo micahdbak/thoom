@@ -6,7 +6,8 @@ In particular:
 - For C/C++, use `.c`/`.cc` and `.h` for source files and header files;
 - Each line of code should not exceed 80 characters;
 - Source files are organised by the functionality they implement, so a directory
-  includes both the header and source files;
+  includes both the header and source files. Engine code is under `src/`; tools
+  are under `tools/`;
 - Includes inside the engine are relative to `src/`, for example
   `#include "map/map.h"`;
 - All code must be contained in a namespace that matches their target;

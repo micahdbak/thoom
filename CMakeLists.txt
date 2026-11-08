@@ -3,6 +3,7 @@ project(thoom VERSION 0.1 LANGUAGES C CXX)
 
 if(PROJECT_IS_TOP_LEVEL)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
   if(NOT CMAKE_CONFIGURATION_TYPES)
     if(NOT CMAKE_BUILD_TYPE)
       set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
@@ -104,4 +105,10 @@ if(WIN32)
           $<TARGET_FILE_DIR:thoom>
       COMMAND_EXPAND_LISTS
   )
+endif()
+
+if(PROJECT_IS_TOP_LEVEL)
+  add_subdirectory(tools)
+else()
+  add_subdirectory(tools EXCLUDE_FROM_ALL)
 endif()
