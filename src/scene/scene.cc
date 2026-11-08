@@ -10,11 +10,16 @@
 #include <vector>
 
 #include "audio/audio.h"
+#include "colour.h"
+#include "hud/hud.h"
 #include "map/map.h"
 #include "object.h"
 #include "renderer/renderer.h"
 #include "save/save_data.h"
 #include "thoom/macros.h"
+
+#define THOOM_TICK_NS 16666667
+#define THOOM_MAX_FRAME_NS 250000000
 
 namespace thoom {
 
@@ -42,6 +47,7 @@ Scene::Scene(const std::string& initial_map, bool create_objects) {
   Scene::instance = this;
 
   this->ticks = SDL_GetTicks();
+  this->last_frame_ns = SDL_GetTicksNS();
 
   if (!initial_map.empty()) {
     this->load_map(initial_map, create_objects);
@@ -179,14 +185,46 @@ void Scene::step() {
 
     this->unload();
     this->load_map(path, create_objects);
+
+    this->state = Scene::kRunning;
+    this->tick();
+    this->state = Scene::kIdle;
     return;
+  }
+
+  uint64_t now = SDL_GetTicksNS();
+  this->accumulator += now - this->last_frame_ns;
+  this->last_frame_ns = now;
+
+  if (this->accumulator > THOOM_MAX_FRAME_NS) {
+    this->accumulator = THOOM_MAX_FRAME_NS;
   }
 
   this->state = Scene::kRunning;
 
-  uint64_t new_ticks = SDL_GetTicks();
-  this->delta = float(new_ticks - this->ticks) / 1000.0f;
-  this->ticks = new_ticks;
+  while (this->accumulator >= THOOM_TICK_NS) {
+    this->accumulator -= THOOM_TICK_NS;
+    this->tick();
+  }
+
+  this->state = Scene::kIdle;
+}
+
+void Scene::tick() {
+  // 16 and two thirds of a millisecond per tick, to track 60 ticks per second.
+  this->ticks += 16;
+  this->tick_fraction += 2;
+
+  if (this->tick_fraction >= 3) {
+    this->tick_fraction -= 3;
+    this->ticks += 1;
+  }
+
+  this->step_objects();
+}
+
+void Scene::step_objects() {
+  Renderer::instance->sprites.clear();
 
   for (Object* object : this->first_objects) {
     if (!object->deleted) object->step();
@@ -211,8 +249,6 @@ void Scene::step() {
   }
 
   this->clean_up_objects(this->last_objects);
-
-  this->state = Scene::kIdle;
 }
 
 void Scene::load_map(const std::string& path, bool create_objects) {
@@ -237,9 +273,18 @@ void Scene::load_map(const std::string& path, bool create_objects) {
   if (save.geti(LOAD_SAVE) == 1) save.data.erase(LOAD_SAVE);
 
   save.data[LOAD_MAP] = this->map->path;
+
+  this->last_frame_ns = SDL_GetTicksNS();
+  this->accumulator = 0;
+
+  if (Hud::instance != nullptr) {
+    Renderer::instance->clear(Hud::instance->ui, kMask);
+  }
 }
 
 void Scene::unload() {
+  Renderer::instance->sprites.clear();
+
   this->save_objects();
 
   this->state = Scene::kUnloading;
