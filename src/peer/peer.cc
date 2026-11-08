@@ -63,11 +63,6 @@ Peer::Peer(bool offerer) {
   this->message_thread = new std::thread(&Peer::message_loop, this);
 }
 
-void Peer::set_offerer(bool offerer) {
-  this->offerer.store(offerer);
-  this->role_set.store(true);
-}
-
 Peer::~Peer() {
   {
     std::lock_guard<std::mutex> guard(this->stop_message_loop_mutex);
@@ -133,6 +128,11 @@ void Peer::send_message(std::string message) {
   }
 
   this->send_messages.push(message);
+}
+
+void Peer::set_offerer(bool offerer) {
+  this->offerer.store(offerer);
+  this->role_set.store(true);
 }
 
 bool Peer::should_stop() {
