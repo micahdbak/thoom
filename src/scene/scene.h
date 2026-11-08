@@ -24,7 +24,8 @@ class Scene {
   struct ObjectDef {
     const char* id;
     Object* (*create_object)(Scene* scene, const std::string& options);
-    ObjectOrder order = kObjectNormal;
+    bool replicated;
+    ObjectOrder order;
   };
 
   inline static Scene* instance = nullptr;
@@ -68,6 +69,7 @@ class Scene {
   void create_new_objects();
   void tick();
   void step_objects();
+  Object* spawn_object(const ObjectDef& def, const std::string& options);
 
   MapRequest next_map;
 

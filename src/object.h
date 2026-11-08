@@ -14,7 +14,14 @@ enum ObjectOrder {
 
 class Object {
  public:
-  Object() : lid(next_lid++) {}
+  Object() : lid(next_lid++) {
+    if (!spawning_replicated) {
+      return;
+    }
+
+    this->replicated = true;
+    this->gid = next_gid++;
+  }
   virtual ~Object() = default;
 
   virtual void step() = 0;
@@ -29,8 +36,11 @@ class Object {
 
   bool deleted = false;
 
+  inline static bool spawning_replicated = false;
+
  private:
   inline static thoom_lid next_lid = 0;
+  inline static thoom_gid next_gid = 1;
 };
 
 struct ObjectRequest {
