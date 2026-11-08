@@ -57,7 +57,7 @@ void Peer::quit() {
 }
 
 Peer::Peer(bool offerer) {
-  this->offerer = offerer;
+  this->offerer.store(offerer);
   rtcPreload();
 
   this->message_thread = new std::thread(&Peer::message_loop, this);
@@ -128,6 +128,11 @@ void Peer::send_message(std::string message) {
   }
 
   this->send_messages.push(message);
+}
+
+void Peer::set_offerer(bool offerer) {
+  this->offerer.store(offerer);
+  this->ready.store(true);
 }
 
 bool Peer::should_stop() {
@@ -279,6 +284,11 @@ void Peer::connected() {
 
 void Peer::message_loop() {
   while (!this->should_stop()) {
+    if (!this->ready.load()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
+    }
+
     switch (this->state.load()) {
       case kStateNoConnection:
         this->no_connection();
