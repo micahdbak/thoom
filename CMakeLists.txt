@@ -37,4 +37,51 @@ endif()
 add_subdirectory(deps/libdatachannel EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
+include_directories(
+  ${PROJECT_SOURCE_DIR}/src
+  ${PROJECT_SOURCE_DIR}/include)
+
+if(NOT WIN32)
+  add_compile_options(
+      $<$<CONFIG:Debug>:-fsanitize=address>
+      $<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
+  add_link_options(
+      $<$<CONFIG:Debug>:-fsanitize=address>)
+endif()
+
 add_subdirectory(src)
+
+add_library(thoom
+  src/thoom.cc)
+
+target_include_directories(thoom
+  PUBLIC
+    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/include)
+
+target_link_libraries(thoom
+  PUBLIC
+    audio
+    hud
+    input
+    map
+    peer
+    renderer
+    save
+    scene
+    sprite
+    texture
+    utils
+    window
+    SDL3::SDL3
+  PRIVATE
+    LibDataChannel::LibDataChannel)
+
+if(WIN32)
+  add_custom_command(TARGET thoom POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_RUNTIME_DLLS:thoom>
+          $<TARGET_FILE_DIR:thoom>
+      COMMAND_EXPAND_LISTS
+  )
+endif()

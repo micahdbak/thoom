@@ -1,7 +1,5 @@
 add_library(window OBJECT
-  window.cc
-  window.h)
+  window.cc)
 
 target_link_libraries(window
-  PUBLIC thoom_headers SDL3::SDL3
-  PRIVATE sanitizers)
+  PUBLIC SDL3::SDL3)

@@ -1,7 +1,5 @@
 add_library(sprite OBJECT
-  sprite.cc
-  sprite.h)
+  sprite.cc)
 
 target_link_libraries(sprite
-  PUBLIC thoom_headers SDL3::SDL3
-  PRIVATE sanitizers)
+  PUBLIC SDL3::SDL3)

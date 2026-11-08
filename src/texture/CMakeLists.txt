@@ -1,7 +1,5 @@
 add_library(texture OBJECT
-  texture.cc
-  texture.h)
+  texture.cc)
 
 target_link_libraries(texture
-  PUBLIC thoom_headers SDL3::SDL3
-  PRIVATE sanitizers)
+  PUBLIC SDL3::SDL3)

@@ -1,7 +1,5 @@
 add_library(scene OBJECT
-  scene.cc
-  scene.h)
+  scene.cc)
 
 target_link_libraries(scene
-  PUBLIC thoom_headers SDL3::SDL3
-  PRIVATE sanitizers)
+  PUBLIC SDL3::SDL3)

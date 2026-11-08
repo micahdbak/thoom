@@ -1,7 +1,5 @@
 add_library(save OBJECT
-  save_data.cc
-  save_data.h)
+  save_data.cc)
 
 target_link_libraries(save
-  PUBLIC thoom_headers SDL3::SDL3
-  PRIVATE sanitizers)
+  PUBLIC SDL3::SDL3)
