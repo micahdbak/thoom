@@ -74,7 +74,7 @@ class Peer {
   void push_message(std::string message);
 
   std::atomic<bool> offerer{false};
-  std::atomic<bool> role_set{false};
+  std::atomic<bool> ready{false};
   std::thread* message_thread = nullptr;
 
   bool stop_message_loop = false;

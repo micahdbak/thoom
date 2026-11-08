@@ -132,7 +132,7 @@ void Peer::send_message(std::string message) {
 
 void Peer::set_offerer(bool offerer) {
   this->offerer.store(offerer);
-  this->role_set.store(true);
+  this->ready.store(true);
 }
 
 bool Peer::should_stop() {
@@ -284,7 +284,7 @@ void Peer::connected() {
 
 void Peer::message_loop() {
   while (!this->should_stop()) {
-    if (!this->role_set.load()) {
+    if (!this->ready.load()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
