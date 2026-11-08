@@ -17,6 +17,7 @@
 #include "renderer/renderer.h"
 #include "save/save_data.h"
 #include "thoom/macros.h"
+#include "thoom/thoom.h"
 
 #define THOOM_TICK_NS 16666667
 #define THOOM_MAX_FRAME_NS 250000000
@@ -60,18 +61,21 @@ Scene::~Scene() {
   this->state = Scene::kUnloading;
 
   for (Object* object : this->first_objects) {
-    this->objects_by_id.erase(object->id);
+    this->objects_by_lid.erase(object->lid);
+    this->unregister_gid_object(object);
     delete object;
   }
 
   for (Object* object : this->last_objects) {
-    this->objects_by_id.erase(object->id);
+    this->objects_by_lid.erase(object->lid);
+    this->unregister_gid_object(object);
     delete object;
   }
 
   this->first_objects.clear();
   this->last_objects.clear();
-  this->objects_by_id.clear();
+  this->objects_by_lid.clear();
+  this->objects_by_gid.clear();
 
   this->state = Scene::kIdle;
 
@@ -156,13 +160,42 @@ void Scene::create_object(const std::string& id, const std::string& options) {
       break;
   }
 
-  this->objects_by_id[object->id] = object;
+  this->objects_by_lid[object->lid] = object;
+  this->register_gid_object(object);
 }
 
-Object* Scene::find_object(int id) {
-  std::unordered_map<int, Object*>::iterator it = this->objects_by_id.find(id);
+Object* Scene::find_object(thoom_lid lid) {
+  std::unordered_map<thoom_lid, Object*>::iterator it =
+      this->objects_by_lid.find(lid);
 
-  if (it == this->objects_by_id.end()) {
+  if (it == this->objects_by_lid.end()) {
+    return nullptr;
+  }
+
+  return it->second;
+}
+
+void Scene::register_gid_object(Object* object) {
+  if (object == nullptr || object->gid == THOOM_GID_NULL) {
+    return;
+  }
+
+  this->objects_by_gid[object->gid] = object;
+}
+
+void Scene::unregister_gid_object(Object* object) {
+  if (object == nullptr || object->gid == THOOM_GID_NULL) {
+    return;
+  }
+
+  this->objects_by_gid.erase(object->gid);
+}
+
+Object* Scene::find_gid_object(thoom_gid gid) {
+  std::unordered_map<thoom_gid, Object*>::iterator it =
+      this->objects_by_gid.find(gid);
+
+  if (it == this->objects_by_gid.end()) {
     return nullptr;
   }
 
@@ -292,7 +325,8 @@ void Scene::unload() {
   while (!this->new_objects.empty()) this->new_objects.pop();
 
   for (Object* object : this->objects) {
-    this->objects_by_id.erase(object->id);
+    this->objects_by_lid.erase(object->lid);
+    this->unregister_gid_object(object);
     delete object;
   }
 
@@ -315,7 +349,8 @@ void Scene::clean_up_objects(std::vector<Object*>& objects) {
       continue;
     }
 
-    this->objects_by_id.erase(object->id);
+    this->objects_by_lid.erase(object->lid);
+    this->unregister_gid_object(object);
     delete object;
     it = objects.erase(it);
   }
@@ -360,7 +395,8 @@ void Scene::create_new_objects() {
         break;
     }
 
-    this->objects_by_id[object->id] = object;
+    this->objects_by_lid[object->lid] = object;
+    this->register_gid_object(object);
   }
 }
 

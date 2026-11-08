@@ -328,7 +328,7 @@ void Hud::draw_peer(bool force_render) {
   }
 
   std::string code = Peer::instance->get_connection_code();
-  uint64_t peer_state = Peer::instance->state.load();
+  uint64_t peer_state = Peer::instance->get_state();
 
   if (force_render || peer_state != this->last_peer_state ||
       code != this->last_code ||
