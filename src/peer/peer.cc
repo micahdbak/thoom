@@ -5,6 +5,7 @@
 #include <mutex>
 #include <string>
 
+#include "peer/peer_thread.h"
 #include "thoom/macros.h"
 #include "thoom/thoom.h"
 
@@ -31,15 +32,19 @@ void Peer::quit() {
   Peer::instance = nullptr;
 }
 
-Peer::Peer(bool offerer) : thread(offerer) {
+Peer::Peer(bool offerer) {
   this->set_pid(offerer ? PEER_GUEST_PID : THOOM_PID_HOST);
+  this->thread = new PeerThread(offerer);
 }
 
-Peer::~Peer() = default;
+Peer::~Peer() {
+  delete this->thread;
+  this->thread = nullptr;
+}
 
 void Peer::set_offerer(bool offerer) {
   this->set_pid(offerer ? PEER_GUEST_PID : THOOM_PID_HOST);
-  this->thread.set_offerer(offerer);
+  this->thread->set_offerer(offerer);
 }
 
 thoom_pid Peer::get_pid() const { return this->pid.load(); }

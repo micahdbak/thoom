@@ -6,7 +6,6 @@
 #include <string>
 
 #include "peer/message_queue.h"
-#include "peer/peer_thread.h"
 #include "thoom/thoom.h"
 
 // shared message codes between cheddar and feta
@@ -34,6 +33,9 @@
 #define MSG_COLLISION 'l'
 
 namespace thoom {
+
+// forward declared as peer_*.h includes libdatachannel headers
+class PeerThread;
 
 class Peer {
  public:
@@ -71,7 +73,7 @@ class Peer {
   std::string connection_code;
   std::mutex connection_code_mutex;
 
-  PeerThread thread;
+  PeerThread* thread = nullptr;
 };
 
 };  // namespace thoom
