@@ -12,6 +12,18 @@
 
 namespace thoom {
 
+#define UI_BOX_CONTAINER 0
+#define UI_BOX_OUT 1
+#define UI_BOX_OUT_SEL 2
+#define UI_BOX_MENU_CONT 3
+#define UI_BOX_MENU_SHD1 4
+#define UI_BOX_MENU_SHD2 5
+#define UI_BOX_CHAR_CONT 6
+#define UI_BOX_CHAR_BOX 7
+#define UI_BOX_CHAR_SEL 8
+#define UI_BOX_CHAR_DISP 9
+#define UI_BOX_MAP_TITLE 10
+
 class Renderer {
  public:
   inline static Renderer* instance = nullptr;
@@ -46,6 +58,7 @@ class Renderer {
                      const int* indices, int num_indices);
   void draw_text(SDL_Texture* dst, int font, std::string text, int x, int y,
                  int w, Colour bg);
+  void draw_ui_box(int type, SDL_Texture* dst, SDL_FRect* rect);
 
   void draw_map_layer(SDL_Texture* dst, Map* map, const SDL_FRect* viewport,
                       int layer, float alpha);
@@ -65,6 +78,7 @@ class Renderer {
 
   std::vector<Font*> fonts;
   std::vector<SpriteRender> sprites;
+  SDL_Texture* ui_box = nullptr;
 
  private:
   bool build_collision_quad(Map* map, const SDL_FRect* src_rect,
