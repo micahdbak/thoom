@@ -176,8 +176,33 @@ Object* Scene::find_object(thoom_lid lid) {
 }
 
 void Scene::register_gid_object(Object* object) {
-  if (object == nullptr || object->gid == THOOM_GID_NULL) {
+  if (object == nullptr) {
     return;
+  }
+
+  if (!object->replicated) {
+    if (object->gid != THOOM_GID_NULL ||
+        object->owner_pid != THOOM_PID_INVALID) {
+      fprintf(stderr, THOOM_LOG
+              "Scene::register_gid_object error: local object has network "
+              "identity\n");
+      exit(1);
+    }
+
+    return;
+  }
+
+  if (object->gid == THOOM_GID_NULL) {
+    fprintf(stderr, THOOM_LOG
+            "Scene::register_gid_object error: replicated object has no gid\n");
+    exit(1);
+  }
+
+  if (object->owner_pid == THOOM_PID_INVALID) {
+    fprintf(stderr, THOOM_LOG
+            "Scene::register_gid_object error: replicated object has no "
+            "owner\n");
+    exit(1);
   }
 
   this->objects_by_gid[object->gid] = object;
