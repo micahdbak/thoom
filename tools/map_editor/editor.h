@@ -17,6 +17,7 @@ class Editor : public thoom::Object {
   ~Editor() override;
 
   void step() override;
+  void render() override;
 
   static thoom::Object* create_object(thoom::Scene* scene,
                                       const std::string& options);
@@ -38,6 +39,7 @@ class Editor : public thoom::Object {
   EditorUI ui;
   EditorSelectedLayer layer = BACKGROUND;
   bool objects_dirty = true;
+  bool hide_ui = false;
 
   SDL_Texture* view_texture = nullptr;
   SDL_Texture* objects_texture = nullptr;

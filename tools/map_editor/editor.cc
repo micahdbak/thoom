@@ -127,7 +127,6 @@ void Editor::step() {
 
   if (!this->ui.inputting) {
     this->ui.move(this->map);
-    this->draw_status();
 
     switch (input->world.character) {
       case 'h':
@@ -163,6 +162,16 @@ void Editor::step() {
     }
   }
 
+  if (this->ui.inputting) {
+    this->ui.step(this->map, this->layer);
+
+    if (!this->ui.inputting) this->hide_ui = true;
+  }
+}
+
+void Editor::render() {
+  if (!this->ui.inputting) this->draw_status();
+
   if (this->objects_dirty) {
     this->render_objects();
     this->objects_dirty = false;
@@ -178,13 +187,10 @@ void Editor::step() {
   this->ui.render(this->view_texture, this->map, this->layer);
 
   if (this->ui.inputting) {
-    this->ui.step(this->map, this->layer);
-
-    if (this->ui.inputting) {
-      this->ui.render_input(this->view_texture, this->map, this->layer);
-    } else {
-      thoom::Renderer::instance->clear(thoom::Hud::instance->ui, thoom::kMask);
-    }
+    this->ui.render_input(this->view_texture, this->map, this->layer);
+  } else if (this->hide_ui) {
+    this->hide_ui = false;
+    thoom::Renderer::instance->clear(thoom::Hud::instance->ui, thoom::kMask);
   }
 
   thoom::Renderer::instance->push_sprite("EDITOR", this->view_texture,
