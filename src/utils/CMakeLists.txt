@@ -1,2 +1,2 @@
-add_library(utils OBJECT
+add_library(thoom_utils OBJECT
   utils.cc)

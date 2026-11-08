@@ -61,18 +61,18 @@ target_include_directories(thoom
 
 target_link_libraries(thoom
   PUBLIC
-    audio
-    hud
-    input
-    map
-    peer
-    renderer
-    save
-    scene
-    sprite
-    texture
-    utils
-    window
+    thoom_audio
+    thoom_hud
+    thoom_input
+    thoom_map
+    thoom_peer
+    thoom_renderer
+    thoom_save
+    thoom_scene
+    thoom_sprite
+    thoom_texture
+    thoom_utils
+    thoom_window
     SDL3::SDL3
   PRIVATE
     LibDataChannel::LibDataChannel)
