@@ -67,7 +67,6 @@ class Scene {
   };
 
   void tick();
-  void step_objects();
   void destroy_object(Object* object);
 
   void load_map(const std::string& path, bool create_objects);
