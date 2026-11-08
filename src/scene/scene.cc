@@ -137,31 +137,7 @@ void Scene::create_object(const std::string& id, const std::string& options) {
     return;
   }
 
-  Object* object = it->second.create_object(this, options);
-
-  if (object == nullptr) {
-    return;
-  }
-
-  if (object->deleted) {
-    delete object;
-    return;
-  }
-
-  switch (it->second.order) {
-    case kObjectFirst:
-      this->first_objects.push_back(object);
-      break;
-    case kObjectLast:
-      this->last_objects.push_back(object);
-      break;
-    default:
-      this->objects.push_back(object);
-      break;
-  }
-
-  this->objects_by_lid[object->lid] = object;
-  this->register_gid_object(object);
+  this->spawn_object(it->second, options);
 }
 
 Object* Scene::find_object(thoom_lid lid) {
@@ -397,32 +373,49 @@ void Scene::create_new_objects() {
       continue;
     }
 
-    Object* object = it->second.create_object(this, request.options);
-
-    if (object == nullptr) {
-      continue;
-    }
-
-    if (object->deleted) {
-      delete object;
-      continue;
-    }
-
-    switch (it->second.order) {
-      case kObjectFirst:
-        this->first_objects.push_back(object);
-        break;
-      case kObjectLast:
-        this->last_objects.push_back(object);
-        break;
-      default:
-        this->objects.push_back(object);
-        break;
-    }
-
-    this->objects_by_lid[object->lid] = object;
-    this->register_gid_object(object);
+    this->spawn_object(it->second, request.options);
   }
+}
+
+Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
+  // Objects take their gid in the constructor, so constructors can already
+  // reference their own object. Replication is decided by the definition.
+  bool was_spawning_replicated = Object::spawning_replicated;
+  Object::spawning_replicated = def.replicated;
+
+  Object* object = def.create_object(this, options);
+
+  Object::spawning_replicated = was_spawning_replicated;
+
+  if (object == nullptr) {
+    return nullptr;
+  }
+
+  if (object->deleted) {
+    delete object;
+    return nullptr;
+  }
+
+  if (object->replicated && object->owner_pid == THOOM_PID_INVALID) {
+    object->owner_pid = this->local_pid;
+  }
+
+  switch (def.order) {
+    case kObjectFirst:
+      this->first_objects.push_back(object);
+      break;
+    case kObjectLast:
+      this->last_objects.push_back(object);
+      break;
+    default:
+      this->objects.push_back(object);
+      break;
+  }
+
+  this->objects_by_lid[object->lid] = object;
+  this->register_gid_object(object);
+
+  return object;
 }
 
 };  // namespace thoom
