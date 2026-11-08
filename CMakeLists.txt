@@ -37,43 +37,4 @@ endif()
 add_subdirectory(deps/libdatachannel EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
-add_library(thoom
-  src/audio.cc
-  src/texture.cc
-  src/collider.cc
-  src/controller.cc
-  src/font.cc
-  src/hud.cc
-  src/input.cc
-
-  src/scene.cc
-  src/map.cc
-  src/map_layer.cc
-  src/peer.cc
-  src/peer_connection.cc
-  src/peer_signaller.cc
-  src/renderer.cc
-  src/save_data.cc
-  src/sprite.cc
-  src/thoom.cc
-  src/tilesheet.cc
-  src/utils.cc
-  src/window.cc
-)
-
-target_include_directories(thoom
-  PUBLIC include
-  PUBLIC src)
-
-target_link_libraries(thoom
-  PUBLIC LibDataChannel::LibDataChannel SDL3::SDL3
-  PRIVATE sanitizers)
-
-if(WIN32)
-  add_custom_command(TARGET thoom POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          $<TARGET_RUNTIME_DLLS:thoom>
-          $<TARGET_FILE_DIR:thoom>
-      COMMAND_EXPAND_LISTS
-  )
-endif()
+add_subdirectory(src)
