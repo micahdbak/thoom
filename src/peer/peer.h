@@ -59,6 +59,8 @@ class Peer {
   std::queue<std::string> all_messages();
   void send_message(std::string message);
 
+  void set_offerer(bool offerer);
+
   std::atomic<uint64_t> state{kStateNoConnection};
 
  private:
@@ -71,7 +73,8 @@ class Peer {
   void message_loop();
   void push_message(std::string message);
 
-  bool offerer = false;
+  std::atomic<bool> offerer{false};
+  std::atomic<bool> role_set{false};
   std::thread* message_thread = nullptr;
 
   bool stop_message_loop = false;

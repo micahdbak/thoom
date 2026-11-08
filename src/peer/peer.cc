@@ -57,10 +57,15 @@ void Peer::quit() {
 }
 
 Peer::Peer(bool offerer) {
-  this->offerer = offerer;
+  this->offerer.store(offerer);
   rtcPreload();
 
   this->message_thread = new std::thread(&Peer::message_loop, this);
+}
+
+void Peer::set_offerer(bool offerer) {
+  this->offerer.store(offerer);
+  this->role_set.store(true);
 }
 
 Peer::~Peer() {
@@ -279,6 +284,11 @@ void Peer::connected() {
 
 void Peer::message_loop() {
   while (!this->should_stop()) {
+    if (!this->role_set.load()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
+    }
+
     switch (this->state.load()) {
       case kStateNoConnection:
         this->no_connection();
