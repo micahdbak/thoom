@@ -5,8 +5,17 @@
 extern "C" {
 #endif
 
+struct hud_def {
+  void (*draw)(void* user);
+  bool (*show_peer)(void* user);
+  bool (*show_hud)(void* user);
+  void (*exit_to_main_menu)(void* user);
+  void* user;
+};
+
 bool thoom_init(const char* title, unsigned int screen_width,
-                unsigned int screen_height, bool offerer);
+                unsigned int screen_height, bool offerer,
+                unsigned long background, const struct hud_def* def);
 
 void thoom_poll_events(bool* quit);
 

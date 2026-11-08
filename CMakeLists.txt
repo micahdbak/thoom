@@ -43,6 +43,7 @@ add_library(thoom
   src/collider.cc
   src/controller.cc
   src/font.cc
+  src/hud.cc
   src/input.cc
 
   src/scene.cc

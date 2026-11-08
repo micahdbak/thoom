@@ -1,7 +1,10 @@
 #include "thoom/thoom.h"
 
+#include <cstdint>
+
 #include "SDL3/SDL.h"
 #include "audio.h"
+#include "hud.h"
 #include "input.h"
 #include "peer.h"
 #include "renderer.h"
@@ -9,7 +12,11 @@
 #include "window.h"
 
 bool thoom_init(const char* title, unsigned int screen_width,
-                unsigned int screen_height, bool offerer) {
+                unsigned int screen_height, bool offerer,
+                unsigned long background, const struct hud_def* def) {
+  struct hud_def default_def = {};
+  const struct hud_def& hud = def != nullptr ? *def : default_def;
+
   if (!thoom::Window::init(title, int(screen_width), int(screen_height))) {
     return false;
   }
@@ -34,8 +41,14 @@ bool thoom_init(const char* title, unsigned int screen_width,
     goto quit_input;
   }
 
+  if (!thoom::Hud::init(static_cast<uint32_t>(background), hud)) {
+    goto quit_peer;
+  }
+
   return true;
 
+quit_peer:
+  thoom::Peer::quit();
 quit_input:
   thoom::Input::quit();
 quit_audio:
@@ -75,6 +88,7 @@ void thoom_poll_events(bool* quit) {
 }
 
 void thoom_quit(void) {
+  thoom::Hud::quit();
   thoom::Peer::quit();
   thoom::Input::quit();
   thoom::Audio::quit();
