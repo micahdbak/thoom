@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstddef>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -52,7 +53,7 @@ class Font {
  public:
   static bool load_fonts(std::vector<Font*>& fonts);
 
-  Font(const char* font_path, int w, int h, int default_w,
+  Font(const void* data, size_t size, int w, int h, int default_w,
        const std::unordered_map<char, int>& special_w);
   ~Font();
 

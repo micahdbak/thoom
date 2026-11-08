@@ -12,6 +12,42 @@
 
 namespace thoom {
 
+static const unsigned char kMonoFont[] = {
+#embed "fonts/mono.bmp"
+};
+
+static const unsigned char kSmallFont[] = {
+#embed "fonts/small.bmp"
+};
+
+static const unsigned char kSmallBoldFont[] = {
+#embed "fonts/small_bold.bmp"
+};
+
+static const unsigned char kDefaultFont[] = {
+#embed "fonts/default.bmp"
+};
+
+static const unsigned char kBoldFont[] = {
+#embed "fonts/bold.bmp"
+};
+
+static const unsigned char kCodeFont[] = {
+#embed "fonts/code.bmp"
+};
+
+static const unsigned char kCodeGrayFont[] = {
+#embed "fonts/code_gray.bmp"
+};
+
+static const unsigned char kTitleFont[] = {
+#embed "fonts/title.bmp"
+};
+
+static const unsigned char kControlsFont[] = {
+#embed "fonts/controls.bmp"
+};
+
 bool Font::load_fonts(std::vector<Font*>& fonts) {
   if (Texture::instance == nullptr) {
     fprintf(stderr,
@@ -20,11 +56,11 @@ bool Font::load_fonts(std::vector<Font*>& fonts) {
   }
 
   // MONO_FONT = 0
-  fonts.push_back(new Font("fonts/mono.bmp", 6, 10, 6, {}));
+  fonts.push_back(new Font(kMonoFont, sizeof(kMonoFont), 6, 10, 6, {}));
 
   // SMALL_FONT = 1
   fonts.push_back(new Font(
-      "fonts/small.bmp", 6, 7, 4,
+      kSmallFont, sizeof(kSmallFont), 6, 7, 4,
       {{' ', 3}, {'!', 2}, {'#', 6}, {'%', 5}, {'&', 5}, {'\'', 3}, {'*', 6},
        {',', 3}, {'.', 2}, {':', 2}, {';', 3}, {'<', 6}, {'>', 6},  {'@', 5},
        {'M', 6}, {'N', 5}, {'W', 6}, {'^', 6}, {'`', 3}, {'i', 2},  {'j', 3},
@@ -32,7 +68,7 @@ bool Font::load_fonts(std::vector<Font*>& fonts) {
 
   // SM_BOLD_FONT = 2
   fonts.push_back(new Font(
-      "fonts/small_bold.bmp", 6, 7, 5,
+      kSmallBoldFont, sizeof(kSmallBoldFont), 6, 7, 5,
       {{' ', 3}, {'!', 2}, {'"', 4}, {'#', 6}, {'$', 4}, {'\'', 3}, {'(', 4},
        {')', 4}, {'*', 6}, {'+', 4}, {',', 3}, {'.', 2}, {':', 2},  {';', 3},
        {'<', 6}, {'>', 6}, {'M', 6}, {'N', 6}, {'W', 6}, {'^', 6},  {'`', 3},
@@ -41,7 +77,7 @@ bool Font::load_fonts(std::vector<Font*>& fonts) {
 
   // DEFAULT_FONT = 3
   fonts.push_back(new Font(
-      "fonts/default.bmp", 6, 10, 5,
+      kDefaultFont, sizeof(kDefaultFont), 6, 10, 5,
       {{' ', 3}, {'!', 2}, {'"', 4}, {'#', 6}, {'\'', 3}, {'(', 4}, {')', 4},
        {'*', 4}, {'+', 6}, {',', 3}, {'.', 2}, {'1', 4},  {':', 2}, {';', 3},
        {'I', 4}, {'J', 4}, {'M', 6}, {'V', 6}, {'W', 6},  {'X', 6}, {'[', 4},
@@ -50,7 +86,7 @@ bool Font::load_fonts(std::vector<Font*>& fonts) {
 
   // BOLD_FONT = 4
   fonts.push_back(new Font(
-      "fonts/bold.bmp", 7, 10, 6,
+      kBoldFont, sizeof(kBoldFont), 7, 10, 6,
       {{' ', 4}, {'!', 2}, {'"', 4},  {'$', 5}, {'%', 5}, {'&', 5}, {'\'', 3},
        {'(', 4}, {')', 4}, {'*', 4},  {',', 3}, {'.', 2}, {'/', 5}, {'1', 5},
        {':', 2}, {';', 3}, {'?', 5},  {'I', 5}, {'J', 5}, {'M', 7}, {'N', 7},
@@ -58,14 +94,14 @@ bool Font::load_fonts(std::vector<Font*>& fonts) {
        {'j', 4}, {'l', 5}, {'m', 7},  {'w', 7}}));
 
   // CODE_FONT = 5
-  fonts.push_back(new Font("fonts/code.bmp", 6, 10, 6, {}));
+  fonts.push_back(new Font(kCodeFont, sizeof(kCodeFont), 6, 10, 6, {}));
 
   // CODE_GRAY_FONT = 6
-  fonts.push_back(new Font("fonts/code_gray.bmp", 6, 10, 6, {}));
+  fonts.push_back(new Font(kCodeGrayFont, sizeof(kCodeGrayFont), 6, 10, 6, {}));
 
   // TITLE_FONT = 7
   fonts.push_back(new Font(
-      "fonts/title.bmp", 8, 13, 6,
+      kTitleFont, sizeof(kTitleFont), 8, 13, 6,
       {{' ', 4}, {'\'', 4}, {',', 4}, {'A', 8}, {'B', 7}, {'C', 7}, {'D', 7},
        {'G', 7}, {'J', 7},  {'K', 7}, {'M', 8}, {'N', 7}, {'O', 7}, {'P', 7},
        {'Q', 7}, {'R', 7},  {'S', 7}, {'U', 7}, {'V', 7}, {'W', 8}, {'X', 8},
@@ -73,7 +109,8 @@ bool Font::load_fonts(std::vector<Font*>& fonts) {
        {'r', 5}, {'t', 5},  {'w', 8}}));
 
   // CONTROLS_FONT = 6
-  fonts.push_back(new Font("fonts/controls.bmp", 8, 16, 8, {{'/', 5}}));
+  fonts.push_back(
+      new Font(kControlsFont, sizeof(kControlsFont), 8, 16, 8, {{'/', 5}}));
 
   for (Font* font : fonts) {
     if (font->texture == nullptr) {
@@ -84,17 +121,24 @@ bool Font::load_fonts(std::vector<Font*>& fonts) {
   return true;
 }
 
-Font::Font(const char* font_path, int w, int h, int default_w,
+Font::Font(const void* data, size_t size, int w, int h, int default_w,
            const std::unordered_map<char, int>& special_w) {
   if (Texture::instance == nullptr) {
     fprintf(stderr, THOOM_LOG "Font::Font error: texture not initialized\n");
     return;
   }
 
-  SDL_Surface* font_surface = SDL_LoadBMP(font_path);
+  SDL_IOStream* stream = SDL_IOFromConstMem(data, size);
+  if (stream == nullptr) {
+    fprintf(stderr, THOOM_LOG "Font::Font error: SDL_IOFromConstMem: %s\n",
+            SDL_GetError());
+    return;
+  }
+
+  SDL_Surface* font_surface = SDL_LoadBMP_IO(stream, true);
   if (font_surface == nullptr) {
-    fprintf(stderr, THOOM_LOG "Font::Font error: '%s' does not exist.\n",
-            font_path);
+    fprintf(stderr, THOOM_LOG "Font::Font error: SDL_LoadBMP_IO: %s\n",
+            SDL_GetError());
     return;
   }
 
