@@ -12,9 +12,11 @@ typedef uint64_t thoom_lid;
 typedef uint64_t thoom_gid;
 typedef uint64_t thoom_pid;
 
+#define THOOM_LID_MAX ((thoom_lid)UINT64_MAX)
+
 #define THOOM_GID_NULL ((thoom_gid)0)
 #define THOOM_GID_MAX ((thoom_gid)UINT64_MAX)
-#define THOOM_LID_MAX ((thoom_lid)UINT64_MAX)
+
 #define THOOM_PID_HOST ((thoom_pid)0)
 #define THOOM_PID_INVALID (~(thoom_pid)0)
 
