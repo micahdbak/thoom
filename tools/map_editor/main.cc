@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <cstdio>
 #include <iostream>
 #include <string>
 
@@ -19,10 +20,28 @@
 bool init(int argc, char** argv);
 
 int main(int argc, char** argv) {
+  if (argc < 2) {
+    std::cerr << "Please provide a map to edit via the command line."
+              << std::endl;
+    return 1;
+  }
+
+  std::string bin_path = std::string(argv[1]) + ".bin";
+  FILE* map_file = std::fopen(bin_path.c_str(), "rb");
+
+  if (map_file != nullptr) {
+    std::fclose(map_file);
+  } else if (argc < 7) {
+    std::cerr << "To create a new map please provide: <map name> <tw> <th> "
+                 "<cols> <rows> <fill(0/1)> <fillts(opt)>."
+              << std::endl;
+    return 1;
+  }
+
   struct hud_def hud = {};
 
   if (!thoom_init("Thoom Engine", THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT,
-                  false, kBackground.val, &hud)) {
+                  false, false, kBackground.val, &hud)) {
     return 1;
   }
 

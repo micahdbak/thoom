@@ -45,7 +45,7 @@ Editor::Editor(const std::vector<std::string>& args) {
   std::string bin_path = args[0] + ".bin";
   FILE* file = fopen(bin_path.c_str(), "rb");
   if (file == nullptr) {
-    if (args.size() < 7) {
+    if (args.size() < 6 || (atoi(args[5].c_str()) && args.size() < 7)) {
       std::cerr << "To create a new map please provide: <map name> <tw> <th> "
                    "<cols> <rows> <fill(0/1)> <fillts(opt)>."
                 << std::endl;
