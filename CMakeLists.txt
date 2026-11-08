@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 3.21)
-project(thoom VERSION 0.1)
+project(thoom VERSION 0.1 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-if(NOT CMAKE_CONFIGURATION_TYPES)
-  if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+if(PROJECT_IS_TOP_LEVEL)
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+  if(NOT CMAKE_CONFIGURATION_TYPES)
+    if(NOT CMAKE_BUILD_TYPE)
+      set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+    endif()
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+        Debug Release RelWithDebInfo MinSizeRel)
   endif()
-  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-      Debug Release RelWithDebInfo MinSizeRel)
 endif()
 
 if(WIN32)
@@ -34,48 +34,69 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   pkg_check_modules(XKBCOMMON REQUIRED xkbcommon)
 endif()
 
-add_subdirectory(deps/libdatachannel EXCLUDE_FROM_ALL)
-add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
-
-include_directories(
-  ${PROJECT_SOURCE_DIR}/src
-  ${PROJECT_SOURCE_DIR}/include)
+set(THOOM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(NOT WIN32)
-  add_compile_options(
+  add_library(thoom_sanitizers INTERFACE)
+  target_compile_options(thoom_sanitizers INTERFACE
       $<$<CONFIG:Debug>:-fsanitize=address>
       $<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
-  add_link_options(
+  target_link_options(thoom_sanitizers INTERFACE
       $<$<CONFIG:Debug>:-fsanitize=address>)
 endif()
 
+add_subdirectory(deps/libdatachannel EXCLUDE_FROM_ALL)
+add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
+
+set(THOOM_ENGINE_LIBS
+  thoom_audio
+  thoom_hud
+  thoom_input
+  thoom_map
+  thoom_peer
+  thoom_renderer
+  thoom_save
+  thoom_scene
+  thoom_sprite
+  thoom_texture
+  thoom_utils
+  thoom_window)
+
 add_subdirectory(src)
+
+foreach(lib IN LISTS THOOM_ENGINE_LIBS)
+  target_compile_features(${lib} PRIVATE cxx_std_20)
+  target_include_directories(${lib} PRIVATE
+    ${THOOM_SOURCE_DIR}/include
+    ${THOOM_SOURCE_DIR}/src)
+  if(NOT WIN32)
+    target_link_libraries(${lib} PRIVATE thoom_sanitizers)
+  endif()
+endforeach()
 
 add_library(thoom
   src/thoom.cc)
+add_library(thoom::thoom ALIAS thoom)
+
+target_compile_features(thoom
+  PUBLIC cxx_std_20)
 
 target_include_directories(thoom
   PUBLIC
-    ${PROJECT_SOURCE_DIR}/src
-    ${PROJECT_SOURCE_DIR}/include)
+    $<BUILD_INTERFACE:${THOOM_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${THOOM_SOURCE_DIR}/src>)
 
 target_link_libraries(thoom
   PUBLIC
-    thoom_audio
-    thoom_hud
-    thoom_input
-    thoom_map
-    thoom_peer
-    thoom_renderer
-    thoom_save
-    thoom_scene
-    thoom_sprite
-    thoom_texture
-    thoom_utils
-    thoom_window
+    ${THOOM_ENGINE_LIBS}
     SDL3::SDL3
   PRIVATE
     LibDataChannel::LibDataChannel)
+
+if(NOT WIN32)
+  target_link_libraries(thoom
+    PUBLIC thoom_sanitizers)
+endif()
 
 if(WIN32)
   add_custom_command(TARGET thoom POST_BUILD
@@ -84,4 +105,10 @@ if(WIN32)
           $<TARGET_FILE_DIR:thoom>
       COMMAND_EXPAND_LISTS
   )
+endif()
+
+if(PROJECT_IS_TOP_LEVEL)
+  add_subdirectory(tools)
+else()
+  add_subdirectory(tools EXCLUDE_FROM_ALL)
 endif()

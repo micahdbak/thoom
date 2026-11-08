@@ -14,7 +14,7 @@ struct hud_def {
 };
 
 bool thoom_init(const char* title, unsigned int screen_width,
-                unsigned int screen_height, bool offerer,
+                unsigned int screen_height, bool peer, bool offerer,
                 unsigned long background, const struct hud_def* def);
 
 void thoom_poll_events(bool* quit);

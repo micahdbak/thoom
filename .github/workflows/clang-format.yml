@@ -5,6 +5,7 @@ on:
     paths:
       - "include/**"
       - "src/**"
+      - "tools/**"
 
 permissions:
   contents: read
