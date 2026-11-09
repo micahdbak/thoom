@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <mutex>
 #include <string>
 
@@ -12,6 +13,8 @@
 
 // #define SIGNALLING_URL "ws://localhost:8080/sc/"
 #define SIGNALLING_URL "wss://cheese.micahdb.com/sc/"
+
+#define SIGNALLING_URL_ENV "THOOM_SIGNALLING_URL"
 
 #define CANDIDATE_TAG "candidate"
 #define DESCRIPTION_TAG "description"
@@ -38,7 +41,10 @@ bool WebRtcSignaller::connect(const std::string& code, bool offerer) {
     this->failed_attempt = false;
   }
 
-  const std::string url = SIGNALLING_URL + code;
+  const char* override_url = getenv(SIGNALLING_URL_ENV);
+  const std::string url =
+      std::string(override_url != nullptr ? override_url : SIGNALLING_URL) +
+      code;
   this->ws = rtcCreateWebSocket(url.c_str());
   if (this->ws < 0) {
     LOG(ERROR)

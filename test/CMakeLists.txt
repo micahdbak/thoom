@@ -19,3 +19,5 @@ target_link_libraries(test_log
     Threads::Threads
     absl::log_sink_registry
     thoom)
+
+add_subdirectory(peer)
