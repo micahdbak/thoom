@@ -34,7 +34,8 @@ static std::string make_code() {
   return code;
 }
 
-PeerThread::PeerThread(bool offerer) {
+PeerThread::PeerThread(Peer* peer, bool offerer) {
+  this->peer = peer;
   this->offerer.store(offerer);
   webrtc_init();
 
@@ -82,12 +83,12 @@ void PeerThread::set_offerer(bool offerer) {
 
 void PeerThread::message_loop() {
   while (!this->stop_requested()) {
-    if (!this->is_ready() || Peer::instance == nullptr) {
+    if (!this->is_ready() || this->peer == nullptr) {
       this->wait_ready();
       continue;
     }
 
-    switch (Peer::instance->get_state()) {
+    switch (this->peer->get_state()) {
       case Peer::kStateNoConnection:
         this->no_connection();
         break;
@@ -99,7 +100,7 @@ void PeerThread::message_loop() {
         break;
       case Peer::kStateTryReset:
         this->signaller->disconnect();
-        Peer::instance->set_connection_code("");
+        this->peer->set_connection_code("");
         this->start_over();
         break;
     }
@@ -117,10 +118,10 @@ void PeerThread::no_connection() {
     std::string code;
 
     if (this->offerer.load()) {
-      code = Peer::instance->get_connection_code();
+      code = this->peer->get_connection_code();
     } else {
       code = make_code();
-      Peer::instance->set_connection_code(code);
+      this->peer->set_connection_code(code);
     }
 
     if (!code.empty() &&
@@ -131,7 +132,7 @@ void PeerThread::no_connection() {
   }
 
   if (this->signaller->state() == WebRtcSignaller::kConnected) {
-    Peer::instance->set_state(Peer::kStateWaitingForPeer);
+    this->peer->set_state(Peer::kStateWaitingForPeer);
     this->got_ping = false;
   }
 
@@ -144,7 +145,7 @@ void PeerThread::waiting_for_peer() {
 
   if (this->connection->state() == Connection::kReady) {
     this->signaller->disconnect();
-    Peer::instance->set_state(Peer::kStateConnected);
+    this->peer->set_state(Peer::kStateConnected);
     return;
   }
 
@@ -218,7 +219,7 @@ void PeerThread::connected() {
   }
 
   std::string message;
-  while (Peer::instance->send_queue.pop(&message)) {
+  while (this->peer->send_queue.pop(&message)) {
     Message outgoing;
     outgoing.bytes.assign(message.begin(), message.end());
     outgoing.reliable = true;
@@ -227,7 +228,7 @@ void PeerThread::connected() {
 
   Message incoming;
   while (this->connection->receive(&incoming)) {
-    Peer::instance->recv_queue.push(
+    this->peer->recv_queue.push(
         std::string(incoming.bytes.begin(), incoming.bytes.end()));
   }
 
@@ -259,7 +260,7 @@ void PeerThread::shut_down() {
 void PeerThread::start_over() {
   this->connection->close();
   this->signaller->disconnect();
-  Peer::instance->set_state(Peer::kStateNoConnection);
+  this->peer->set_state(Peer::kStateNoConnection);
 
   this->pause(PEER_RETRY_MS);
 }

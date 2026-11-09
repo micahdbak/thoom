@@ -33,7 +33,7 @@ void Peer::quit() {
 
 Peer::Peer(bool offerer) {
   this->set_pid(offerer ? PEER_GUEST_PID : THOOM_PID_HOST);
-  this->thread = new PeerThread(offerer);
+  this->thread = new PeerThread(this, offerer);
 }
 
 Peer::~Peer() {

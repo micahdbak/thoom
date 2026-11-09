@@ -6,6 +6,7 @@
 #include <mutex>
 #include <thread>
 
+#include "peer/peer.h"
 #include "webrtc/webrtc_connection.h"
 #include "webrtc/webrtc_signaller.h"
 
@@ -13,7 +14,7 @@ namespace thoom {
 
 class PeerThread {
  public:
-  explicit PeerThread(bool offerer);
+  PeerThread(Peer* peer, bool offerer);
   ~PeerThread();
 
   void set_offerer(bool offerer);
@@ -41,6 +42,7 @@ class PeerThread {
 
   void pause(uint32_t timeout_ms);
 
+  Peer* peer = nullptr;
   std::atomic<bool> offerer{false};
 
   std::mutex control_mutex;
