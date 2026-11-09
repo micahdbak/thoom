@@ -1,4 +1,6 @@
 ---
+# clang-tidy has no per-language configuration. The C and C++ passes share these
+# checks; scripts/tidy.sh picks the language by directory.
 Checks: '-*,misc-include-cleaner'
 CheckOptions:
   misc-include-cleaner.IgnoreHeaders: 'SDL3/.*'
