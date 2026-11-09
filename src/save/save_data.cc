@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "scene/scene.h"
-#include "thoom/macros.h"
 
 namespace thoom {
 
@@ -62,8 +62,7 @@ static unsigned long _djb2_hash(unsigned long starting_hash, const char* str) {
 
 void SaveData::write_file(int file_i) {
   if (file_i < 0) {
-    fprintf(stderr, THOOM_LOG "bad save.\n");
-    exit(1);
+    LOG(FATAL) << "bad save";
   }
 
   char save_file_name[1024];
@@ -75,8 +74,7 @@ void SaveData::write_file(int file_i) {
   SDL_free(save_root);
   FILE* save_file = fopen(save_file_name, "w");
   if (save_file == NULL) {
-    fprintf(stderr, THOOM_LOG "bad save.\n");
-    exit(1);
+    LOG(FATAL) << "bad save";
   }
 
   std::string line;
@@ -117,8 +115,7 @@ void SaveData::write_file(int file_i) {
 
 int SaveData::load_file(int file_i) {
   if (file_i < 0) {
-    fprintf(stderr, THOOM_LOG "bad save.\n");
-    exit(1);
+    LOG(FATAL) << "bad save";
   }
 
   char save_file_name[1024];
@@ -169,8 +166,7 @@ int SaveData::load_file(int file_i) {
       unsigned long hash_in_file;
 
       if (1 != sscanf(line, "%lu\n", &hash_in_file)) {
-        // TODO(micahdbak): error
-        exit(1);
+        LOG(FATAL) << "bad save hash";
       }
 
       fclose(save_file);

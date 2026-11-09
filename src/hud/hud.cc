@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <string>
 
+#include "absl/log/log.h"
 #include "audio/audio.h"
 #include "colour.h"
 #include "input/controller.h"
@@ -26,7 +27,7 @@ namespace thoom {
 
 bool Hud::init(uint32_t background, const struct hud_def& def) {
   if (Hud::instance != nullptr) {
-    fprintf(stderr, THOOM_LOG "Hud::init error: hud already initialized\n");
+    LOG(ERROR) << "Hud::init error: hud already initialized";
     return false;
   }
 
@@ -57,7 +58,7 @@ Hud::Hud(uint32_t background, const struct hud_def& def)
       user_data(def.user),
       background(background) {
   if (Texture::instance == nullptr || Window::instance == nullptr) {
-    fprintf(stderr, THOOM_LOG "Hud::Hud error: engine not initialized\n");
+    LOG(ERROR) << "Hud::Hud error: engine not initialized";
     return;
   }
 
@@ -69,7 +70,7 @@ Hud::Hud(uint32_t background, const struct hud_def& def)
       SDL_PIXELFORMAT_RGBA32, SDL_SCALEMODE_LINEAR);
 
   if (this->ui == nullptr || this->overlay == nullptr) {
-    fprintf(stderr, THOOM_LOG "Hud::Hud error: %s\n", SDL_GetError());
+    LOG(ERROR) << "Hud::Hud error: " << SDL_GetError();
     return;
   }
 

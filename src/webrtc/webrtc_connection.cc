@@ -4,15 +4,13 @@
 
 #include <chrono>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <string>
 #include <utility>
 
+#include "absl/log/log.h"
 #include "connection.h"
-#include "thoom/macros.h"
 
 #define RELIABLE_LABEL "reliable"
 #define UNRELIABLE_LABEL "unreliable"
@@ -28,10 +26,8 @@ WebRtcConnection::~WebRtcConnection() { this->close(); }
 
 void WebRtcConnection::start_collecting(bool offerer) {
   if (this->current_state != Connection::kDead) {
-    fprintf(stderr, THOOM_LOG
-            "WebRtcConnection::start_collecting fatal error: already "
-            "collecting or alive\n");
-    exit(1);
+    LOG(FATAL) << "WebRtcConnection::start_collecting error: already "
+                  "collecting or alive";
   }
 
   rtcConfiguration config = {};
@@ -44,12 +40,9 @@ void WebRtcConnection::start_collecting(bool offerer) {
 
   this->pc = rtcCreatePeerConnection(&config);
   if (this->pc < 0) {
-    fprintf(stderr,
-            THOOM_LOG
-            "WebRtcConnection::start_collecting fatal error: "
-            "rtcCreatePeerConnection returned error code: %d\n",
-            this->pc);
-    exit(1);
+    LOG(FATAL) << "WebRtcConnection::start_collecting error: "
+                  "rtcCreatePeerConnection returned error code: "
+               << this->pc;
   }
 
   rtcSetUserPointer(this->pc, this);
@@ -72,12 +65,10 @@ void WebRtcConnection::start_collecting(bool offerer) {
         rtcCreateDataChannelEx(this->pc, UNRELIABLE_LABEL, &unreliable);
 
     if (this->reliable_dc < 0 || this->unreliable_dc < 0) {
-      fprintf(stderr,
-              THOOM_LOG
-              "WebRtcConnection::start_collecting fatal error: "
-              "rtcCreateDataChannelEx returned error code: %d, %d\n",
-              this->reliable_dc.load(), this->unreliable_dc.load());
-      exit(1);
+      LOG(FATAL) << "WebRtcConnection::start_collecting error: "
+                    "rtcCreateDataChannelEx returned error code: "
+                 << this->reliable_dc.load() << ", "
+                 << this->unreliable_dc.load();
     }
 
     this->setup_channel(this->reliable_dc);
@@ -90,10 +81,7 @@ void WebRtcConnection::start_collecting(bool offerer) {
 void WebRtcConnection::set_remote_description(const std::string& sdp,
                                               const std::string& type) {
   if (this->current_state != Connection::kConnecting || this->pc < 0) {
-    fprintf(stderr, THOOM_LOG
-            "WebRtcConnection::set_remote_description fatal error: "
-            "bad state\n");
-    exit(1);
+    LOG(FATAL) << "WebRtcConnection::set_remote_description error: bad state";
   }
 
   rtcSetRemoteDescription(this->pc, sdp.c_str(), type.c_str());
@@ -110,9 +98,7 @@ std::pair<std::string, std::string> WebRtcConnection::local_description() {
 void WebRtcConnection::add_candidate(const std::string& cand,
                                      const std::string& mid) {
   if (this->current_state != Connection::kConnecting || this->pc < 0) {
-    fprintf(stderr, THOOM_LOG
-            "WebRtcConnection::add_candidate fatal error: bad state\n");
-    exit(1);
+    LOG(FATAL) << "WebRtcConnection::add_candidate error: bad state";
   }
 
   rtcAddRemoteCandidate(this->pc, cand.c_str(), mid.c_str());
@@ -169,25 +155,21 @@ bool WebRtcConnection::receive(Message* message) {
 
 bool WebRtcConnection::send(const Message& message) {
   if (this->current_state != Connection::kReady) {
-    fprintf(stderr,
-            THOOM_LOG "WebRtcConnection::send warning: not connected\n");
+    LOG(WARNING) << "WebRtcConnection::send: not connected";
     return false;
   }
 
   const int dc =
       message.reliable ? this->reliable_dc.load() : this->unreliable_dc.load();
   if (dc < 0) {
-    fprintf(stderr,
-            THOOM_LOG "WebRtcConnection::send warning: channel not open\n");
+    LOG(WARNING) << "WebRtcConnection::send: channel not open";
     return false;
   }
 
   if (this->max_payload != 0 && message.bytes.size() > this->max_payload) {
-    fprintf(stderr,
-            THOOM_LOG
-            "WebRtcConnection::send warning: message is %zu bytes, "
-            "limit is %zu\n",
-            message.bytes.size(), this->max_payload);
+    LOG(WARNING) << "WebRtcConnection::send: message is "
+                 << message.bytes.size() << " bytes, limit is "
+                 << this->max_payload;
     return false;
   }
 
@@ -268,7 +250,7 @@ void WebRtcConnection::on_close(int dc, void* user_ptr) {
 }
 
 void WebRtcConnection::on_error(int dc, const char* error, void* user_ptr) {
-  fprintf(stderr, THOOM_LOG "WebRtcConnection::on_error: %s\n", error);
+  LOG(ERROR) << "WebRtcConnection::on_error: " << error;
   WebRtcConnection* connection = static_cast<WebRtcConnection*>(user_ptr);
   connection->push_event(kEventFailed, dc);
 }
@@ -276,8 +258,7 @@ void WebRtcConnection::on_error(int dc, const char* error, void* user_ptr) {
 void WebRtcConnection::on_message(int dc, const char* message, int size,
                                   void* user_ptr) {
   if (size < 0) {
-    fprintf(stderr, THOOM_LOG
-            "WebRtcConnection::on_message warning: dropped text message\n");
+    LOG(WARNING) << "WebRtcConnection::on_message: dropped text message";
     return;
   }
 

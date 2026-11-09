@@ -7,8 +7,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "texture/texture.h"
-#include "thoom/macros.h"
 
 namespace thoom {
 
@@ -50,8 +50,7 @@ static const unsigned char kControlsFont[] = {
 
 bool Font::load_fonts(std::vector<Font*>& fonts) {
   if (Texture::instance == nullptr) {
-    fprintf(stderr,
-            THOOM_LOG "Font::load_fonts error: texture not initialized\n");
+    LOG(ERROR) << "Font::load_fonts error: texture not initialized";
     return false;
   }
 
@@ -124,21 +123,19 @@ bool Font::load_fonts(std::vector<Font*>& fonts) {
 Font::Font(const void* data, size_t size, int w, int h, int default_w,
            const std::unordered_map<char, int>& special_w) {
   if (Texture::instance == nullptr) {
-    fprintf(stderr, THOOM_LOG "Font::Font error: texture not initialized\n");
+    LOG(ERROR) << "Font::Font error: texture not initialized";
     return;
   }
 
   SDL_IOStream* stream = SDL_IOFromConstMem(data, size);
   if (stream == nullptr) {
-    fprintf(stderr, THOOM_LOG "Font::Font error: SDL_IOFromConstMem: %s\n",
-            SDL_GetError());
+    LOG(ERROR) << "Font::Font error: SDL_IOFromConstMem: " << SDL_GetError();
     return;
   }
 
   SDL_Surface* font_surface = SDL_LoadBMP_IO(stream, true);
   if (font_surface == nullptr) {
-    fprintf(stderr, THOOM_LOG "Font::Font error: SDL_LoadBMP_IO: %s\n",
-            SDL_GetError());
+    LOG(ERROR) << "Font::Font error: SDL_LoadBMP_IO: " << SDL_GetError();
     return;
   }
 

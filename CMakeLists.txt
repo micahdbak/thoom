@@ -45,6 +45,8 @@ if(NOT WIN32)
       $<$<CONFIG:Debug>:-fsanitize=address>)
 endif()
 
+find_package(absl REQUIRED CONFIG)
+
 add_subdirectory(deps/libdatachannel EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
@@ -70,12 +72,14 @@ foreach(lib IN LISTS THOOM_ENGINE_LIBS)
   target_include_directories(${lib} PRIVATE
     ${THOOM_SOURCE_DIR}/include
     ${THOOM_SOURCE_DIR}/src)
+  target_link_libraries(${lib} PRIVATE absl::log)
   if(NOT WIN32)
     target_link_libraries(${lib} PRIVATE thoom_sanitizers)
   endif()
 endforeach()
 
 add_library(thoom
+  src/log.cc
   src/thoom.cc)
 add_library(thoom::thoom ALIAS thoom)
 
@@ -92,6 +96,10 @@ target_link_libraries(thoom
     ${THOOM_ENGINE_LIBS}
     SDL3::SDL3
   PRIVATE
+    absl::log
+    absl::log_globals
+    absl::log_initialize
+    absl::log_sink_registry
     LibDataChannel::LibDataChannel)
 
 if(NOT WIN32)
@@ -108,8 +116,14 @@ if(WIN32)
   )
 endif()
 
+option(THOOM_BUILD_TESTS "Build the thoom tests" OFF)
+
 if(PROJECT_IS_TOP_LEVEL)
   add_subdirectory(tools)
 else()
   add_subdirectory(tools EXCLUDE_FROM_ALL)
+endif()
+
+if(PROJECT_IS_TOP_LEVEL AND THOOM_BUILD_TESTS)
+  add_subdirectory(test)
 endif()

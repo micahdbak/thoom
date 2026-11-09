@@ -8,7 +8,7 @@
 #include <mutex>
 #include <string>
 
-#include "thoom/macros.h"
+#include "absl/log/log.h"
 
 // #define SIGNALLING_URL "ws://localhost:8080/sc/"
 #define SIGNALLING_URL "wss://cheese.micahdb.com/sc/"
@@ -26,9 +26,7 @@ WebRtcSignaller::~WebRtcSignaller() { this->disconnect(); }
 
 bool WebRtcSignaller::connect(const std::string& code, bool offerer) {
   if (this->state_value != WebRtcSignaller::kNotConnected) {
-    fprintf(stderr, THOOM_LOG
-            "WebRtcSignaller::connect warning: already connecting or "
-            "connected\n");
+    LOG(WARNING) << "WebRtcSignaller::connect: already connecting or connected";
     return false;
   }
 
@@ -43,11 +41,9 @@ bool WebRtcSignaller::connect(const std::string& code, bool offerer) {
   const std::string url = SIGNALLING_URL + code;
   this->ws = rtcCreateWebSocket(url.c_str());
   if (this->ws < 0) {
-    fprintf(stderr,
-            THOOM_LOG
-            "WebRtcSignaller::connect warning: rtcCreateWebSocket returned "
-            "error code: %d\n",
-            this->ws);
+    LOG(ERROR)
+        << "WebRtcSignaller::connect: rtcCreateWebSocket returned error code: "
+        << this->ws;
     return false;
   }
 
@@ -141,7 +137,7 @@ void WebRtcSignaller::on_close(int, void* user_ptr) {
 }
 
 void WebRtcSignaller::on_error(int, const char* error, void* user_ptr) {
-  fprintf(stderr, THOOM_LOG "WebRtcSignaller::on_error: %s\n", error);
+  LOG(ERROR) << "WebRtcSignaller::on_error: " << error;
   WebRtcSignaller* signaller = static_cast<WebRtcSignaller*>(user_ptr);
   std::lock_guard<std::mutex> guard(signaller->mutex);
   signaller->closed = true;
@@ -162,8 +158,7 @@ void WebRtcSignaller::on_message(int, const char* message, int size,
 
 bool WebRtcSignaller::send_message(const std::string& message) {
   if (this->state_value != WebRtcSignaller::kConnected || this->ws < 0) {
-    fprintf(stderr,
-            THOOM_LOG "WebRtcSignaller::send_message warning: not connected\n");
+    LOG(WARNING) << "WebRtcSignaller::send_message: not connected";
     return false;
   }
 
