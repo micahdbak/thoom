@@ -123,6 +123,7 @@ void Audio::play(const std::string& wav_path, float gain, float x, float y,
   auto it = this->sources.find(wav_path);
 
   if (it == this->sources.end()) {
+    LOG(WARNING) << "Audio::play: '" << wav_path << "' is not loaded";
     return;
   }
 

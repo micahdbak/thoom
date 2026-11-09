@@ -9,6 +9,12 @@ namespace thoom {
 
 Tilesheet::Tilesheet(const char* tilesheet_path, int tile_width,
                      int tile_height) {
+  if (tile_width <= 0 || tile_height <= 0) {
+    LOG(ERROR) << "Tilesheet::Tilesheet error: invalid tile size " << tile_width
+               << "x" << tile_height;
+    return;
+  }
+
   SDL_Surface* tilesheet_surface = SDL_LoadBMP(tilesheet_path);
   if (tilesheet_surface == nullptr) {
     LOG(ERROR) << "Tilesheet::Tilesheet error: '" << tilesheet_path

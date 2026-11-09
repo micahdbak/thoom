@@ -29,6 +29,8 @@ class PeerThread {
 
   bool apply_event(const WebRtcSignaller::Event& event);
 
+  void shut_down();
+
   void start_over();
 
   bool stop_requested();
@@ -49,8 +51,8 @@ class PeerThread {
   bool got_ping = false;
   std::thread* message_thread = nullptr;
 
-  WebRtcConnection connection;
-  WebRtcSignaller signaller;
+  WebRtcConnection* connection = nullptr;
+  WebRtcSignaller* signaller = nullptr;
 };
 
 };  // namespace thoom

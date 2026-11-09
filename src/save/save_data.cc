@@ -19,15 +19,21 @@ SaveData save;
 
 #define PREF_ORG "CheddarAndFeta"
 #define PREF_APP "Game"
+#define NO_SUMMARY "..."
 
 std::vector<std::string> SaveData::file_summaries() {
   char save_file_name[1024];
   char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
   std::vector<std::string> summaries;
 
+  if (save_root == nullptr) {
+    LOG(ERROR) << "SaveData::file_summaries error: " << SDL_GetError();
+    return summaries;
+  }
+
   for (int i = 0;; i++) {
     // open save file
-    snprintf(save_file_name, sizeof(save_file_name), "%s/save%d.txt", save_root,
+    snprintf(save_file_name, sizeof(save_file_name), "%ssave%d.txt", save_root,
              i);
     FILE* save_file = fopen(save_file_name, "r");
     if (save_file == NULL) {
@@ -36,7 +42,15 @@ std::vector<std::string> SaveData::file_summaries() {
 
     // read first line of file
     char line[1024];
-    if (fgets(line, sizeof(line), save_file) == NULL) break;
+    if (fgets(line, sizeof(line), save_file) == NULL) {
+      LOG(WARNING) << "SaveData::file_summaries: '" << save_file_name
+                   << "' has no summary line";
+      fclose(save_file);
+
+      // Keep the slot in the list so the numbers after it do not shift.
+      summaries.push_back(NO_SUMMARY);
+      continue;
+    }
 
     line[strcspn(line, "\n")] = '\0';
 
@@ -68,8 +82,13 @@ void SaveData::write_file(int file_i) {
   char save_file_name[1024];
   char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
 
+  if (save_root == nullptr) {
+    LOG(ERROR) << "SaveData::write_file error: " << SDL_GetError();
+    return;
+  }
+
   // open file
-  snprintf(save_file_name, sizeof(save_file_name), "%s/save%d.txt", save_root,
+  snprintf(save_file_name, sizeof(save_file_name), "%ssave%d.txt", save_root,
            file_i);
   SDL_free(save_root);
   FILE* save_file = fopen(save_file_name, "w");
@@ -108,7 +127,12 @@ void SaveData::write_file(int file_i) {
   snprintf(buff, sizeof(buff), "%lu\n", hash);
   fputs(buff, save_file);
 
-  fclose(save_file);
+  const bool write_failed = ferror(save_file) != 0;
+
+  if (fclose(save_file) != 0 || write_failed) {
+    LOG(ERROR) << "SaveData::write_file error: could not write '"
+               << save_file_name << "'";
+  }
 }
 
 #define MAX_LINE_LENGTH 10240  // 10kb
@@ -121,10 +145,15 @@ int SaveData::load_file(int file_i) {
   char save_file_name[1024];
   char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
 
+  if (save_root == nullptr) {
+    LOG(ERROR) << "SaveData::load_file error: " << SDL_GetError();
+    return LOAD_TAMPER;
+  }
+
   this->data.clear();
 
   // open file
-  snprintf(save_file_name, sizeof(save_file_name), "%s/save%d.txt", save_root,
+  snprintf(save_file_name, sizeof(save_file_name), "%ssave%d.txt", save_root,
            file_i);
   SDL_free(save_root);
   FILE* save_file = fopen(save_file_name, "r");
@@ -133,10 +162,15 @@ int SaveData::load_file(int file_i) {
   }
 
   char line[MAX_LINE_LENGTH];
-  unsigned long hash = 0;
 
-  fgets(line, sizeof(line), save_file);
-  hash = _djb2_hash(hash, line);
+  if (fgets(line, sizeof(line), save_file) == NULL) {
+    LOG(WARNING) << "SaveData::load_file: '" << save_file_name
+                 << "' has no summary line";
+    fclose(save_file);
+    return LOAD_TAMPER;
+  }
+
+  unsigned long hash = _djb2_hash(0, line);
 
   // for every subsequent line in the file
   while (fgets(line, sizeof(line), save_file) != NULL) {

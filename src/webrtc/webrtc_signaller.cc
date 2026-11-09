@@ -22,10 +22,8 @@
 
 namespace thoom {
 
-WebRtcSignaller::~WebRtcSignaller() { this->disconnect(); }
-
 bool WebRtcSignaller::connect(const std::string& code, bool offerer) {
-  if (this->state_value != WebRtcSignaller::kNotConnected) {
+  if (this->state_value != WebRtcSignaller::kNotConnected || this->ws >= 0) {
     LOG(WARNING) << "WebRtcSignaller::connect: already connecting or connected";
     return false;
   }
@@ -36,6 +34,8 @@ bool WebRtcSignaller::connect(const std::string& code, bool offerer) {
     this->events.clear();
     this->opened = false;
     this->closed = false;
+    this->connected_once = false;
+    this->failed_attempt = false;
   }
 
   const std::string url = SIGNALLING_URL + code;
@@ -59,6 +59,13 @@ bool WebRtcSignaller::connect(const std::string& code, bool offerer) {
 
 void WebRtcSignaller::disconnect() {
   if (this->ws >= 0) {
+    // Deleting a socket that still has callbacks makes libdatachannel fire the
+    // closed callback while it holds its own lock, and the callback locks that
+    // same lock. Detach first.
+    rtcSetOpenCallback(this->ws, nullptr);
+    rtcSetClosedCallback(this->ws, nullptr);
+    rtcSetErrorCallback(this->ws, nullptr);
+    rtcSetMessageCallback(this->ws, nullptr);
     rtcDelete(this->ws);
     this->ws = -1;
   }
@@ -67,19 +74,31 @@ void WebRtcSignaller::disconnect() {
 }
 
 void WebRtcSignaller::poll() {
-  std::lock_guard<std::mutex> guard(this->mutex);
+  bool was_closed = false;
 
-  if (this->opened) {
-    this->opened = false;
-    this->state_value = WebRtcSignaller::kConnected;
+  {
+    std::lock_guard<std::mutex> guard(this->mutex);
+
+    if (this->opened) {
+      this->opened = false;
+      this->connected_once = true;
+      this->state_value = WebRtcSignaller::kConnected;
+    }
+
+    if (this->closed) {
+      this->closed = false;
+      was_closed = true;
+      this->failed_attempt = !this->connected_once;
+    }
+
+    this->assemble_events();
   }
 
-  if (this->closed) {
-    this->closed = false;
-    this->state_value = WebRtcSignaller::kNotConnected;
+  // Release the socket outside the lock: a leaked one would be destroyed under
+  // the library's own lock at rtcCleanup and could never report back.
+  if (was_closed) {
+    this->disconnect();
   }
-
-  this->assemble_events();
 }
 
 bool WebRtcSignaller::send_ping() { return this->send_message(PING_TAG); }
@@ -121,6 +140,8 @@ void WebRtcSignaller::wait(uint32_t timeout_ms) {
 WebRtcSignaller::State WebRtcSignaller::state() const {
   return this->state_value;
 }
+
+bool WebRtcSignaller::failed() const { return this->failed_attempt; }
 
 void WebRtcSignaller::on_open(int, void* user_ptr) {
   WebRtcSignaller* signaller = static_cast<WebRtcSignaller*>(user_ptr);

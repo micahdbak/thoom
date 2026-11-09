@@ -22,8 +22,6 @@ static const char* ICE_SERVER_URLS[ICE_SERVER_COUNT] = {
 
 namespace thoom {
 
-WebRtcConnection::~WebRtcConnection() { this->close(); }
-
 void WebRtcConnection::start_collecting(bool offerer) {
   if (this->current_state != Connection::kDead) {
     LOG(FATAL) << "WebRtcConnection::start_collecting error: already "
@@ -184,16 +182,25 @@ Connection::State WebRtcConnection::state() const {
 
 void WebRtcConnection::close() {
   if (this->reliable_dc >= 0) {
+    this->detach_channel(this->reliable_dc);
     rtcDelete(this->reliable_dc);
     this->reliable_dc = -1;
   }
 
   if (this->unreliable_dc >= 0) {
+    this->detach_channel(this->unreliable_dc);
     rtcDelete(this->unreliable_dc);
     this->unreliable_dc = -1;
   }
 
   if (this->pc >= 0) {
+    // Detach first: deleting returns straight into our callbacks, which take
+    // locks that libdatachannel holds during deletion.
+    rtcSetClosedCallback(this->pc, nullptr);
+    rtcSetErrorCallback(this->pc, nullptr);
+    rtcSetDataChannelCallback(this->pc, nullptr);
+    rtcSetLocalDescriptionCallback(this->pc, nullptr);
+    rtcSetLocalCandidateCallback(this->pc, nullptr);
     rtcDelete(this->pc);
     this->pc = -1;
   }
@@ -278,6 +285,13 @@ void WebRtcConnection::setup_channel(int dc) {
   rtcSetClosedCallback(dc, WebRtcConnection::on_close);
   rtcSetErrorCallback(dc, WebRtcConnection::on_error);
   rtcSetMessageCallback(dc, WebRtcConnection::on_message);
+}
+
+void WebRtcConnection::detach_channel(int dc) {
+  rtcSetOpenCallback(dc, nullptr);
+  rtcSetClosedCallback(dc, nullptr);
+  rtcSetErrorCallback(dc, nullptr);
+  rtcSetMessageCallback(dc, nullptr);
 }
 
 void WebRtcConnection::push_event(EventKind kind, int dc) {

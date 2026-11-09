@@ -30,7 +30,7 @@ class WebRtcSignaller {
   };
 
   WebRtcSignaller() = default;
-  ~WebRtcSignaller();
+  ~WebRtcSignaller() = default;
 
   bool connect(const std::string& code, bool offerer);
 
@@ -51,6 +51,8 @@ class WebRtcSignaller {
   void wait(uint32_t timeout_ms);
 
   State state() const;
+
+  bool failed() const;
 
  private:
   static void on_open(int, void* user_ptr);
@@ -76,6 +78,8 @@ class WebRtcSignaller {
   std::deque<Event> events;
   bool opened = false;
   bool closed = false;
+  bool connected_once = false;
+  bool failed_attempt = false;
 };
 
 };  // namespace thoom

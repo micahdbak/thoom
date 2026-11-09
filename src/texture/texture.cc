@@ -41,6 +41,11 @@ Texture::~Texture() {
 
 void Texture::register_render_function(const std::string& name,
                                        RenderFunction func) {
+  if (this->render_functions.find(name) != this->render_functions.end()) {
+    LOG(WARNING) << "Texture::register_render_function: '" << name
+                 << "' is already registered";
+  }
+
   this->render_functions[name] = func;
 }
 
@@ -69,6 +74,12 @@ SDL_Texture* Texture::load(const std::string& path) {
     args[1023] = '\0';
 
     SDL_Texture* texture = this->render_functions[buff](args);
+
+    if (texture == nullptr) {
+      LOG(ERROR) << "Texture::load error: render function " << buff
+                 << " returned no texture for " << path;
+    }
+
     this->textures[path] = texture;
     return texture;
   }
@@ -81,6 +92,12 @@ SDL_Texture* Texture::load(const std::string& path) {
   SDL_Texture* texture =
       this->create_texture_from_surface(surface, SDL_SCALEMODE_NEAREST);
   SDL_DestroySurface(surface);
+
+  if (texture == nullptr) {
+    LOG(ERROR) << "Texture::load error: could not create a texture for "
+               << path;
+  }
+
   this->textures[path] = texture;
   return texture;
 }

@@ -75,6 +75,7 @@ Scene::~Scene() {
 
 void Scene::register_object(const ObjectDef& def) {
   if (def.id == nullptr) {
+    LOG(ERROR) << "Scene::register_object error: definition has no id";
     return;
   }
 
@@ -88,6 +89,7 @@ void Scene::register_object(const ObjectDef& def) {
 
 void Scene::register_objects(const ObjectDef* defs) {
   if (defs == nullptr) {
+    LOG(ERROR) << "Scene::register_objects error: no definition table";
     return;
   }
 
@@ -103,6 +105,8 @@ void Scene::request_map(const std::string& path, bool create_objects) {
 
 void Scene::create_object(const std::string& id, const std::string& options) {
   if (this->state == Scene::kUnloading) {
+    LOG(WARNING) << "Scene::create_object: '" << id
+                 << "' dropped while the scene unloads";
     return;
   }
 
@@ -360,6 +364,8 @@ Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
   Object::spawning_replicated = was_spawning_replicated;
 
   if (object == nullptr) {
+    LOG(ERROR) << "Scene::spawn_object error: '" << def.id
+               << "' factory returned null";
     return nullptr;
   }
 
