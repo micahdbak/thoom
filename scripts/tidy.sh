@@ -36,7 +36,8 @@ tidy() {
 # The compile database carries the include paths but no standard, because the
 # compiler's default is already C++20. Force it for clang-tidy, whose default
 # is older.
-tidy --extra-arg=-std=c++20 -- 'src/*.cc' 'tools/*.cc' 'src/*.c' 'tools/*.c'
+tidy --extra-arg=-std=c++20 -- \
+  'src/*.cc' 'test/*.cc' 'tools/*.cc' 'src/*.c' 'tools/*.c'
 
 # clang-tidy reports only on the main file, so headers need their own pass.
 # Headers have no compile command, so supply the language and include paths.
@@ -50,7 +51,7 @@ CXX_HEADER_ARGS=(
   --extra-arg=-I"${PWD}/tools/map_editor"
   --extra-arg=-I"${PWD}/deps/SDL/include"
 )
-tidy "${CXX_HEADER_ARGS[@]}" -- 'src/*.h' 'tools/*.h'
+tidy "${CXX_HEADER_ARGS[@]}" -- 'src/*.h' 'test/*.h' 'tools/*.h'
 
 C_HEADER_ARGS=(
   --extra-arg=-xc

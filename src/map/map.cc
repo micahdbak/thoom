@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "colour.h"
 #include "map/map_collider.h"
 #include "map/map_layer.h"
@@ -42,8 +43,7 @@ Map::Map(const char* map_path) {
   int i;
 
   if (map_path == NULL) {
-    fprintf(stderr, THOOM_LOG "null map path.\n");
-    exit(1);
+    LOG(FATAL) << "null map path";
   }
 
   map_txt_path = std::string(map_path) + ".txt";
@@ -196,8 +196,7 @@ corrupted:
     fclose(bin_file);
   }
 
-  fprintf(stderr, THOOM_LOG "'%s' corrupted.\n", map_path);
-  exit(1);
+  LOG(FATAL) << "'" << map_path << "' corrupted";
 }
 
 Map::Map(int tile_width, int tile_height, int cols, int rows) {
@@ -246,8 +245,7 @@ void Map::write(const char* map_path) const {
 
   FILE* txt_file = fopen(map_txt_path.c_str(), "w");
   if (txt_file == nullptr) {
-    fprintf(stderr, THOOM_LOG "'%s' corrupted.\n", map_path);
-    exit(1);
+    LOG(FATAL) << "'" << map_path << "' corrupted";
   }
 
   fprintf(txt_file, "%s\n%s\n", this->title.c_str(), this->description.c_str());
@@ -273,8 +271,7 @@ void Map::write(const char* map_path) const {
   fclose(txt_file);
   FILE* bin_file = fopen(map_bin_path.c_str(), "wb");
   if (bin_file == nullptr) {
-    fprintf(stderr, THOOM_LOG "'%s' corrupted.\n", map_path);
-    exit(1);
+    LOG(FATAL) << "'" << map_path << "' corrupted";
   }
   uint8_t buffer[1024];
 

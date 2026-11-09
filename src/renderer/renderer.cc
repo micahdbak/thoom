@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <string>
 
+#include "absl/log/log.h"
 #include "colour.h"
 #include "map/map.h"
 #include "map/map_collider.h"
@@ -25,13 +26,12 @@ static const unsigned char kRendererUiBoxBmp[] = {
 
 bool Renderer::init() {
   if (Renderer::instance != nullptr) {
-    fprintf(stderr,
-            THOOM_LOG "Renderer::init error: renderer already initialized\n");
+    LOG(ERROR) << "Renderer::init error: renderer already initialized";
     return false;
   }
 
   if (Window::instance == nullptr) {
-    fprintf(stderr, THOOM_LOG "Renderer::init error: window not initialized\n");
+    LOG(ERROR) << "Renderer::init error: window not initialized";
     return false;
   }
 
@@ -138,7 +138,7 @@ void Renderer::map_rect(const Map* map, const SDL_FRect* viewport,
 
 void Renderer::clear(SDL_Texture* texture, Colour colour) {
   if (texture == nullptr) {
-    // TODO(micahdbak): warning
+    LOG(WARNING) << "Renderer::clear: null texture";
     return;
   }
 
@@ -152,7 +152,7 @@ void Renderer::clear(SDL_Texture* texture, Colour colour) {
 void Renderer::draw_rect(SDL_Texture* dst, SDL_FRect* rect, Colour colour,
                          SDL_BlendMode blend_mode) {
   if (dst == nullptr) {
-    // TODO(micahdbak): warning
+    LOG(WARNING) << "Renderer::draw_rect: null destination";
     return;
   }
 
@@ -167,7 +167,7 @@ void Renderer::draw_rect(SDL_Texture* dst, SDL_FRect* rect, Colour colour,
 void Renderer::draw_outline(SDL_Texture* dst, SDL_FRect* rect, Colour colour,
                             SDL_BlendMode blend_mode) {
   if (dst == nullptr) {
-    // TODO(micahdbak): warning
+    LOG(WARNING) << "Renderer::draw_outline: null destination";
     return;
   }
 
@@ -183,7 +183,7 @@ void Renderer::draw_texture(SDL_Texture* dst, SDL_Texture* texture,
                             const SDL_FRect* src_rect,
                             const SDL_FRect* dst_rect) {
   if (dst == nullptr || texture == nullptr) {
-    // TODO(micahdbak): warning
+    LOG(WARNING) << "Renderer::draw_texture: null destination or texture";
     return;
   }
 
@@ -197,7 +197,7 @@ void Renderer::draw_texture_tiled(SDL_Texture* dst, SDL_Texture* texture,
                                   const SDL_FRect* src_rect, float scale,
                                   const SDL_FRect* dst_rect) {
   if (dst == nullptr || texture == nullptr) {
-    // TODO(micahdbak): warning
+    LOG(WARNING) << "Renderer::draw_texture_tiled: null destination or texture";
     return;
   }
 
@@ -211,7 +211,7 @@ void Renderer::draw_geometry(SDL_Texture* dst, SDL_Texture* texture,
                              const SDL_Vertex* vertices, int num_vertices,
                              const int* indices, int num_indices) {
   if (dst == nullptr || vertices == nullptr) {
-    // TODO(micahdbak): warning
+    LOG(WARNING) << "Renderer::draw_geometry: null destination or vertices";
     return;
   }
 
@@ -224,7 +224,7 @@ void Renderer::draw_geometry(SDL_Texture* dst, SDL_Texture* texture,
 void Renderer::draw_text(SDL_Texture* dst, int font, std::string text, int x,
                          int y, int w, Colour bg) {
   if (dst == nullptr || font < 0 || font >= NUM_FONTS) {
-    // TODO(micahdbak): warning
+    LOG(WARNING) << "Renderer::draw_text: null destination or bad font index";
     return;
   }
 
@@ -320,7 +320,7 @@ void Renderer::draw_text(SDL_Texture* dst, int font, std::string text, int x,
 
 void Renderer::draw_ui_box(int type, SDL_Texture* dst, SDL_FRect* rect) {
   if (this->ui_box == nullptr || dst == nullptr) {
-    // TODO(micahdbak): warning
+    LOG(WARNING) << "Renderer::draw_ui_box: null ui box or destination";
     return;
   }
 

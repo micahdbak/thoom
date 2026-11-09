@@ -2,16 +2,14 @@
 
 #include <SDL3/SDL.h>
 
-#include <cstdio>
-
+#include "absl/log/log.h"
 #include "input/controller.h"
-#include "thoom/macros.h"
 
 namespace thoom {
 
 bool Input::init() {
   if (Input::instance != nullptr) {
-    fprintf(stderr, THOOM_LOG "Input::init error: input already initialized\n");
+    LOG(ERROR) << "Input::init error: input already initialized";
     return false;
   }
 

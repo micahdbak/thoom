@@ -25,16 +25,6 @@ extern "C" {
 #define THOOM_PI_F 3.141592653589793f
 #define THOOM_PI_D 3.141592653589793
 
-#ifdef __FILE_NAME__
-#define THOOM_FILE __FILE_NAME__
-#else
-#define THOOM_FILE __FILE__
-#endif
-
-#define THOOM_STR_(_x) #_x
-#define THOOM_STR(_x) THOOM_STR_(_x)
-#define THOOM_LOG THOOM_FILE ":" THOOM_STR(__LINE__) ": "
-
 #ifdef __cplusplus
 }
 #endif

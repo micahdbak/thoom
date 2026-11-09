@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "colour.h"
 #include "editor_ui.h"
 #include "hud/hud.h"
@@ -31,9 +32,7 @@ static void parse_billboard_options(const std::string& options, int* x, int* y,
   char buff[1024];
   if (sscanf(options.c_str(), "%d,%d,%d,%d,%d,%d,%d,%1023[^\n]", x, y, ts_x,
              ts_y, w, h, depth, buff) < 8) {
-    std::cerr << "parse_billboard_options error: bad options: " << options
-              << std::endl;
-    std::exit(1);
+    LOG(FATAL) << "parse_billboard_options error: bad options: " << options;
   }
 
   tilesheet = buff;
@@ -46,10 +45,8 @@ Editor::Editor(const std::vector<std::string>& args) {
   FILE* file = fopen(bin_path.c_str(), "rb");
   if (file == nullptr) {
     if (args.size() < 6 || (atoi(args[5].c_str()) && args.size() < 7)) {
-      std::cerr << "To create a new map please provide: <map name> <tw> <th> "
-                   "<cols> <rows> <fill(0/1)> <fillts(opt)>."
-                << std::endl;
-      std::exit(1);
+      LOG(FATAL) << "To create a new map please provide: <map name> <tw> <th> "
+                    "<cols> <rows> <fill(0/1)> <fillts(opt)>.";
     }
 
     int tile_width = atoi(args[1].c_str());
@@ -63,8 +60,7 @@ Editor::Editor(const std::vector<std::string>& args) {
 
     if (should_fill) {
       if (!this->map->add_tilesheet(args[6].c_str())) {
-        std::cerr << args[6] << " is not a valid tilesheet." << std::endl;
-        std::exit(1);
+        LOG(FATAL) << args[6] << " is not a valid tilesheet.";
       }
 
       thoom::Tilesheet* tilesheet = this->map->tilesheets[0];

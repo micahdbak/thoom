@@ -28,7 +28,7 @@ class WebRtcConnection : public Connection {
 
  public:
   WebRtcConnection() = default;
-  ~WebRtcConnection() override;
+  ~WebRtcConnection() override = default;
 
   void start_collecting(bool offerer);
 
@@ -70,6 +70,8 @@ class WebRtcConnection : public Connection {
   static void on_message(int dc, const char* message, int size, void* user_ptr);
 
   void setup_channel(int dc);
+
+  void detach_channel(int dc);
 
   void push_event(EventKind kind, int dc);
 

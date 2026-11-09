@@ -1,12 +1,11 @@
 #include "peer/peer.h"
 
 #include <cstdint>
-#include <cstdio>
 #include <mutex>
 #include <string>
 
+#include "absl/log/log.h"
 #include "peer/peer_thread.h"
-#include "thoom/macros.h"
 #include "thoom/thoom.h"
 
 #define PEER_GUEST_PID ((thoom_pid)1)
@@ -15,7 +14,7 @@ namespace thoom {
 
 bool Peer::init(bool offerer) {
   if (Peer::instance != nullptr) {
-    fprintf(stderr, THOOM_LOG "Peer::init error: a peer already exists.\n");
+    LOG(ERROR) << "Peer::init error: a peer already exists";
     return false;
   }
 

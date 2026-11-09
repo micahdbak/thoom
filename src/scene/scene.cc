@@ -3,12 +3,11 @@
 #include <SDL3/SDL.h>
 
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "audio/audio.h"
 #include "colour.h"
 #include "hud/hud.h"
@@ -16,7 +15,6 @@
 #include "object.h"
 #include "renderer/renderer.h"
 #include "save/save_data.h"
-#include "thoom/macros.h"
 #include "thoom/thoom.h"
 
 #define THOOM_TICK_NS 16666667
@@ -26,7 +24,7 @@ namespace thoom {
 
 bool Scene::init(const std::string& initial_map, bool create_objects) {
   if (Scene::instance != nullptr) {
-    fprintf(stderr, THOOM_LOG "Scene::init error: scene already initialized\n");
+    LOG(ERROR) << "Scene::init error: scene already initialized";
     return false;
   }
 
@@ -77,14 +75,13 @@ Scene::~Scene() {
 
 void Scene::register_object(const ObjectDef& def) {
   if (def.id == nullptr) {
+    LOG(ERROR) << "Scene::register_object error: definition has no id";
     return;
   }
 
   if (this->factories.find(def.id) != this->factories.end()) {
-    fprintf(stderr,
-            THOOM_LOG "Scene::register_object error: '%s' already exists\n",
-            def.id);
-    exit(1);
+    LOG(FATAL) << "Scene::register_object error: '" << def.id
+               << "' already exists";
   }
 
   this->factories[def.id] = def;
@@ -92,6 +89,7 @@ void Scene::register_object(const ObjectDef& def) {
 
 void Scene::register_objects(const ObjectDef* defs) {
   if (defs == nullptr) {
+    LOG(ERROR) << "Scene::register_objects error: no definition table";
     return;
   }
 
@@ -107,6 +105,8 @@ void Scene::request_map(const std::string& path, bool create_objects) {
 
 void Scene::create_object(const std::string& id, const std::string& options) {
   if (this->state == Scene::kUnloading) {
+    LOG(WARNING) << "Scene::create_object: '" << id
+                 << "' dropped while the scene unloads";
     return;
   }
 
@@ -122,9 +122,7 @@ void Scene::create_object(const std::string& id, const std::string& options) {
       this->factories.find(id);
 
   if (it == this->factories.end()) {
-    fprintf(stderr,
-            THOOM_LOG "Scene::create_object error: '%s' does not exist\n",
-            id.c_str());
+    LOG(ERROR) << "Scene::create_object error: '" << id << "' does not exist";
     return;
   }
 
@@ -139,26 +137,21 @@ void Scene::register_gid_object(Object* object) {
   if (!object->replicated) {
     if (object->gid != THOOM_GID_NULL ||
         object->owner_pid != THOOM_PID_INVALID) {
-      fprintf(stderr, THOOM_LOG
-              "Scene::register_gid_object error: local object has network "
-              "identity\n");
-      exit(1);
+      LOG(FATAL) << "Scene::register_gid_object error: local object has "
+                    "network identity";
     }
 
     return;
   }
 
   if (object->gid == THOOM_GID_NULL) {
-    fprintf(stderr, THOOM_LOG
-            "Scene::register_gid_object error: replicated object has no gid\n");
-    exit(1);
+    LOG(FATAL)
+        << "Scene::register_gid_object error: replicated object has no gid";
   }
 
   if (object->owner_pid == THOOM_PID_INVALID) {
-    fprintf(stderr, THOOM_LOG
-            "Scene::register_gid_object error: replicated object has no "
-            "owner\n");
-    exit(1);
+    LOG(FATAL)
+        << "Scene::register_gid_object error: replicated object has no owner";
   }
 
   this->objects_by_gid[object->gid] = object;
@@ -351,10 +344,8 @@ void Scene::create_new_objects() {
         this->factories.find(request.id);
 
     if (it == this->factories.end()) {
-      fprintf(stderr,
-              THOOM_LOG
-              "Scene::create_new_objects error: '%s' does not exist\n",
-              request.id.c_str());
+      LOG(ERROR) << "Scene::create_new_objects error: '" << request.id
+                 << "' does not exist";
       continue;
     }
 
@@ -373,6 +364,8 @@ Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
   Object::spawning_replicated = was_spawning_replicated;
 
   if (object == nullptr) {
+    LOG(ERROR) << "Scene::spawn_object error: '" << def.id
+               << "' factory returned null";
     return nullptr;
   }
 

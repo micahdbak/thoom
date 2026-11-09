@@ -3,6 +3,10 @@
 #include <cstdint>
 
 #include "SDL3/SDL.h"
+#include "absl/base/log_severity.h"
+#include "absl/log/globals.h"
+#include "absl/log/initialize.h"
+#include "absl/log/log_sink_registry.h"
 #include "audio/audio.h"
 #include "hud/hud.h"
 #include "input/input.h"
@@ -11,9 +15,19 @@
 #include "texture/texture.h"
 #include "window/window.h"
 
+// Abseil has no logging shutdown, and initializing twice is an error, so the
+// first successful init wins.
+static bool log_initialized = false;
+
 bool thoom_init(const char* title, uint32_t screen_width,
                 uint32_t screen_height, bool peer, bool offerer,
                 uint32_t background, const struct hud_def* def) {
+  if (!log_initialized) {
+    absl::InitializeLog();
+    absl::SetStderrThreshold(absl::LogSeverityAtLeast::kInfo);
+    log_initialized = true;
+  }
+
   struct hud_def default_def = {};
   const struct hud_def& hud = def != nullptr ? *def : default_def;
 
@@ -95,4 +109,6 @@ void thoom_quit(void) {
   thoom::Renderer::quit();
   thoom::Texture::quit();
   thoom::Window::quit();
+
+  absl::FlushLogSinks();
 }
