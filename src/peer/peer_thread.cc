@@ -1,20 +1,20 @@
 #include "peer/peer_thread.h"
 
-#include <rtc/rtc.h>
-
 #include <chrono>
+#include <cstdint>
 #include <mutex>
 #include <random>
 #include <string>
 #include <thread>
 #include <utility>
 
+#include "connection.h"
 #include "peer/peer.h"
+#include "webrtc/webrtc.h"
 
-#define CANDIDATE_MSG "candidate"
-#define DESCRIPTION_MSG "description"
-#define FAIL_MSG "fail"
-#define PING_MSG "ping"
+#define PEER_WAIT_MS 10
+#define PEER_PING_MS 500
+#define PEER_RETRY_MS 500
 
 namespace thoom {
 
@@ -24,48 +24,50 @@ static std::string make_code() {
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> dis(0, sizeof(charset) - 2);
 
-  std::string ret;
+  std::string code;
   for (int i = 0; i < 6; i++) {
-    char c = charset[dis(gen)];
-    ret.push_back(c);
+    code.push_back(charset[dis(gen)]);
   }
 
-  return ret;
+  return code;
 }
 
 PeerThread::PeerThread(bool offerer) {
   this->offerer.store(offerer);
-  rtcPreload();
+  webrtc_init();
 
   this->message_thread = new std::thread(&PeerThread::message_loop, this);
 }
 
 PeerThread::~PeerThread() {
   {
-    std::lock_guard<std::mutex> guard(this->stop_message_loop_mutex);
-    this->stop_message_loop = true;
+    std::lock_guard<std::mutex> guard(this->control_mutex);
+    this->stop = true;
   }
+  this->control_cv.notify_one();
 
   this->message_thread->join();
   delete this->message_thread;
   this->message_thread = nullptr;
-  rtcCleanup();
+
+  webrtc_quit();
 }
 
 void PeerThread::set_offerer(bool offerer) {
   this->offerer.store(offerer);
-  this->ready.store(true);
-}
 
-bool PeerThread::should_stop() {
-  std::lock_guard<std::mutex> guard(this->stop_message_loop_mutex);
-  return this->stop_message_loop;
+  {
+    std::lock_guard<std::mutex> guard(this->control_mutex);
+    this->ready = true;
+  }
+
+  this->control_cv.notify_one();
 }
 
 void PeerThread::message_loop() {
-  while (!this->should_stop()) {
-    if (!this->ready.load() || Peer::instance == nullptr) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  while (!this->stop_requested()) {
+    if (!this->is_ready() || Peer::instance == nullptr) {
+      this->wait_ready();
       continue;
     }
 
@@ -80,155 +82,185 @@ void PeerThread::message_loop() {
         this->connected();
         break;
       case Peer::kStateTryReset:
-        // disconnect everything and clear connection code
-        this->connection.kill();
         this->signaller.disconnect();
         Peer::instance->set_connection_code("");
-
-        Peer::instance->set_state(Peer::kStateNoConnection);
+        this->start_over();
         break;
     }
   }
 
-  this->connection.kill();
+  this->connection.close();
   this->signaller.disconnect();
-}
-
-void PeerThread::start_over() {
-  this->connection.kill();
-  this->signaller.disconnect();
-  Peer::instance->set_state(Peer::kStateNoConnection);
-
-  // sleep an additional 500ms for good luck
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
 }
 
 void PeerThread::no_connection() {
-  switch (this->signaller.state) {
-    case PeerSignaller::State::NOT_CONNECTED: {
-      std::string connection_code;
+  this->signaller.poll();
 
-      if (this->offerer) {
-        connection_code = Peer::instance->get_connection_code();
-        if (connection_code.empty()) break;
-      } else {
-        connection_code = make_code();
-        Peer::instance->set_connection_code(connection_code);
-      }
+  if (this->signaller.state() == WebRtcSignaller::kNotConnected) {
+    std::string code;
 
-      this->signaller.connect(connection_code, this->offerer);
+    if (this->offerer.load()) {
+      code = Peer::instance->get_connection_code();
+    } else {
+      code = make_code();
+      Peer::instance->set_connection_code(code);
+    }
 
-    } break;
-
-    case PeerSignaller::State::CONNECTED:
-      Peer::instance->set_state(Peer::kStateWaitingForPeer);
-      this->got_ping = false;
-
-      break;
-
-    default:
-      break;  // PeerSignaller::State::CONNECTING
+    if (!code.empty() && !this->signaller.connect(code, this->offerer.load())) {
+      this->pause(PEER_RETRY_MS);
+      return;
+    }
   }
 
-  // wait half a second before checking on the connection
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  if (this->signaller.state() == WebRtcSignaller::kConnected) {
+    Peer::instance->set_state(Peer::kStateWaitingForPeer);
+    this->got_ping = false;
+  }
+
+  this->pause(PEER_WAIT_MS);
 }
 
 void PeerThread::waiting_for_peer() {
-  // when the connection is alive, we are no longer waiting for peer
-  if (this->connection.state == PeerConnection::State::ALIVE) {
-    this->signaller.disconnect();  // no longer needed
+  this->signaller.poll();
+  this->connection.poll();
+
+  if (this->connection.state() == Connection::kReady) {
+    this->signaller.disconnect();
     Peer::instance->set_state(Peer::kStateConnected);
     return;
   }
 
-  // if signaller disconnected or connection error'd
-  if (this->signaller.state != PeerSignaller::State::CONNECTED ||
-      this->connection.state == PeerConnection::State::ERROR) {
+  if (this->signaller.state() != WebRtcSignaller::kConnected ||
+      this->connection.state() == Connection::kFailed) {
     this->start_over();
     return;
   }
 
-  std::string msg = this->signaller.receive();
-
-  // signaller is connected, but no peer yet
   if (!this->got_ping) {
-    this->signaller.send(PING_MSG);
+    if (!this->signaller.send_ping()) {
+      this->start_over();
+      return;
+    }
 
-    if (msg == PING_MSG || msg == DESCRIPTION_MSG || msg == CANDIDATE_MSG) {
-      this->got_ping = true;
-      this->connection.start_collecting(this->offerer);
-    } else {
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    WebRtcSignaller::Event event = {};
+    if (!this->signaller.receive(&event)) {
+      this->signaller.wait(PEER_PING_MS);
+      return;
+    }
+
+    // The server answers fail to every message while no peer has joined.
+    if (event.kind == WebRtcSignaller::Event::kFail) {
+      this->signaller.wait(PEER_PING_MS);
+      return;
+    }
+
+    this->got_ping = true;
+    this->connection.start_collecting(this->offerer.load());
+
+    if (!this->apply_event(event)) {
+      this->start_over();
       return;
     }
   }
 
-  // got_ping is true past here
-
-  if (!msg.empty()) {
-    if (msg == DESCRIPTION_MSG) {
-      std::string sdp = this->signaller.block_receive();
-      std::string type = this->signaller.block_receive();
-      if (sdp.empty() || type.empty()) {
-        this->start_over();
-        return;
-      }
-
-      this->connection.set_remote_description(sdp, type);
-    } else if (msg == CANDIDATE_MSG) {
-      std::string cand = this->signaller.block_receive();
-      std::string mid = this->signaller.block_receive();
-      if (cand.empty() || mid.empty()) {
-        this->start_over();
-        return;
-      }
-
-      this->connection.add_candidate(cand, mid);
-    } else if (msg == FAIL_MSG) {
-      this->start_over();  // peer gave up
+  WebRtcSignaller::Event event = {};
+  while (this->signaller.receive(&event)) {
+    if (!this->apply_event(event)) {
+      this->start_over();
       return;
     }
   }
 
-  // offer will be generated by the offerer when ready, answer when ready
-  std::pair<std::string, std::string> pair =
-      this->connection.get_local_description();
-  if (!pair.first.empty()) {
-    this->signaller.send(DESCRIPTION_MSG);
-    this->signaller.send(pair.first);   // sdp
-    this->signaller.send(pair.second);  // type
+  const std::pair<std::string, std::string> description =
+      this->connection.local_description();
+  if (!description.first.empty() &&
+      !this->signaller.send_description(description.first,
+                                        description.second)) {
+    this->start_over();
+    return;
   }
 
-  // candidate
-  pair = this->connection.get_candidate();
-  if (!pair.first.empty()) {
-    this->signaller.send(CANDIDATE_MSG);
-    this->signaller.send(pair.first);
-    this->signaller.send(pair.second);
+  const std::pair<std::string, std::string> candidate =
+      this->connection.candidate();
+  if (!candidate.first.empty() &&
+      !this->signaller.send_candidate(candidate.first, candidate.second)) {
+    this->start_over();
+    return;
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  this->signaller.wait(PEER_WAIT_MS);
 }
 
 void PeerThread::connected() {
-  // if connection died, start over
-  if (this->connection.state != PeerConnection::State::ALIVE) {
+  this->connection.poll();
+
+  if (this->connection.state() != Connection::kReady) {
     this->start_over();
     return;
   }
 
-  // connection is alive, send messages
   std::string message;
   while (Peer::instance->send_queue.pop(&message)) {
-    this->connection.send(message);
+    Message outgoing;
+    outgoing.bytes.assign(message.begin(), message.end());
+    outgoing.reliable = true;
+    this->connection.send(outgoing);
   }
 
-  // receive messages
-  message = this->connection.receive();
-  if (!message.empty()) {
-    Peer::instance->recv_queue.push(message);
+  Message incoming;
+  while (this->connection.receive(&incoming)) {
+    Peer::instance->recv_queue.push(
+        std::string(incoming.bytes.begin(), incoming.bytes.end()));
   }
+
+  this->connection.wait(PEER_WAIT_MS);
+}
+
+bool PeerThread::apply_event(const WebRtcSignaller::Event& event) {
+  switch (event.kind) {
+    case WebRtcSignaller::Event::kPing:
+      return true;
+    case WebRtcSignaller::Event::kDescription:
+      this->connection.set_remote_description(event.first, event.second);
+      return true;
+    case WebRtcSignaller::Event::kCandidate:
+      this->connection.add_candidate(event.first, event.second);
+      return true;
+    case WebRtcSignaller::Event::kFail:
+      return false;
+  }
+
+  return false;
+}
+
+void PeerThread::start_over() {
+  this->connection.close();
+  this->signaller.disconnect();
+  Peer::instance->set_state(Peer::kStateNoConnection);
+
+  this->pause(PEER_RETRY_MS);
+}
+
+bool PeerThread::stop_requested() {
+  std::lock_guard<std::mutex> guard(this->control_mutex);
+  return this->stop;
+}
+
+bool PeerThread::is_ready() {
+  std::lock_guard<std::mutex> guard(this->control_mutex);
+  return this->ready;
+}
+
+void PeerThread::wait_ready() {
+  std::unique_lock<std::mutex> lock(this->control_mutex);
+  this->control_cv.wait_for(lock, std::chrono::milliseconds(PEER_RETRY_MS),
+                            [this] { return this->ready || this->stop; });
+}
+
+void PeerThread::pause(uint32_t timeout_ms) {
+  std::unique_lock<std::mutex> lock(this->control_mutex);
+  this->control_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+                            [this] { return this->stop; });
 }
 
 };  // namespace thoom

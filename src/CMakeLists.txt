@@ -1,3 +1,6 @@
+# peer depends on this; keep separate from below list
+add_subdirectory(webrtc)
+
 add_subdirectory(audio)
 add_subdirectory(hud)
 add_subdirectory(input)

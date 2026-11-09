@@ -1,40 +1,56 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
+#include <cstdint>
 #include <mutex>
 #include <thread>
 
-#include "peer/peer_connection.h"
-#include "peer/peer_signaller.h"
+#include "webrtc/webrtc_connection.h"
+#include "webrtc/webrtc_signaller.h"
 
 namespace thoom {
 
 class PeerThread {
  public:
-  PeerThread(bool offerer);
+  explicit PeerThread(bool offerer);
   ~PeerThread();
 
   void set_offerer(bool offerer);
 
  private:
-  bool should_stop();
   void message_loop();
 
-  void start_over();
   void no_connection();
+
   void waiting_for_peer();
+
   void connected();
 
+  bool apply_event(const WebRtcSignaller::Event& event);
+
+  void start_over();
+
+  bool stop_requested();
+
+  bool is_ready();
+
+  void wait_ready();
+
+  void pause(uint32_t timeout_ms);
+
   std::atomic<bool> offerer{false};
-  std::atomic<bool> ready{false};
+
+  std::mutex control_mutex;
+  std::condition_variable control_cv;
+  bool ready = false;
+  bool stop = false;
+
   bool got_ping = false;
-
   std::thread* message_thread = nullptr;
-  bool stop_message_loop = false;
-  std::mutex stop_message_loop_mutex;
 
-  PeerConnection connection;
-  PeerSignaller signaller;
+  WebRtcConnection connection;
+  WebRtcSignaller signaller;
 };
 
 };  // namespace thoom

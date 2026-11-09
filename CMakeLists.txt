@@ -60,6 +60,7 @@ set(THOOM_ENGINE_LIBS
   thoom_sprite
   thoom_texture
   thoom_utils
+  thoom_webrtc
   thoom_window)
 
 add_subdirectory(src)

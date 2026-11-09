@@ -11,7 +11,7 @@ class MessageQueue {
   void push(std::string message);
 
   bool pop(std::string* message);
-  bool take_last(std::string* message);
+
   std::queue<std::string> take_all();
 
  private:
