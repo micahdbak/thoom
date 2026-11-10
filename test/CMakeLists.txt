@@ -20,4 +20,5 @@ target_link_libraries(test_log
     absl::log_sink_registry
     thoom)
 
+add_subdirectory(peer)
 add_subdirectory(switch)
