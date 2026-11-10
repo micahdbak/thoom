@@ -10,7 +10,6 @@
 
 #include "absl/log/log.h"
 
-// #define SIGNALLING_URL "ws://localhost:8080/sc/"
 #define SIGNALLING_URL "wss://cheese.micahdb.com/sc/"
 
 #define SIGNALLING_URL_ENV "THOOM_SIGNALLING_URL"
@@ -27,7 +26,34 @@ static const char CODE_CHARSET[] = "023456789ABCEFHLPRUXY";
 
 namespace thoom {
 
-bool WebRtcSignaller::connect(const std::string& code, bool offerer) {
+std::string WebRtcSignaller::make_code() {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(0, sizeof(CODE_CHARSET) - 2);
+
+  std::string code;
+  for (int i = 0; i < CODE_LENGTH; i++) {
+    code.push_back(CODE_CHARSET[dis(gen)]);
+  }
+
+  return code;
+}
+
+bool WebRtcSignaller::valid_code(const std::string& code) {
+  if (code.size() != CODE_LENGTH) {
+    return false;
+  }
+
+  for (const char c : code) {
+    if ((c < 'A' || c > 'Z') && (c < '0' || c > '9')) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool WebRtcSignaller::connect(const std::string& code) {
   if (this->state_value != WebRtcSignaller::kNotConnected || this->ws >= 0) {
     LOG(WARNING) << "WebRtcSignaller::connect: already connecting or connected";
     return false;
@@ -118,6 +144,10 @@ void WebRtcSignaller::poll() {
   }
 }
 
+WebRtcSignaller::State WebRtcSignaller::state() const {
+  return this->state_value;
+}
+
 bool WebRtcSignaller::send_ping() { return this->send_message(PING_TAG); }
 
 bool WebRtcSignaller::send_description(const std::string& sdp,
@@ -141,37 +171,6 @@ bool WebRtcSignaller::receive(Event* event) {
 
   *event = this->events.front();
   this->events.pop_front();
-  return true;
-}
-
-WebRtcSignaller::State WebRtcSignaller::state() const {
-  return this->state_value;
-}
-
-std::string WebRtcSignaller::make_code() {
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dis(0, sizeof(CODE_CHARSET) - 2);
-
-  std::string code;
-  for (int i = 0; i < CODE_LENGTH; i++) {
-    code.push_back(CODE_CHARSET[dis(gen)]);
-  }
-
-  return code;
-}
-
-bool WebRtcSignaller::valid_code(const std::string& code) {
-  if (code.size() != CODE_LENGTH) {
-    return false;
-  }
-
-  for (const char c : code) {
-    if ((c < 'A' || c > 'Z') && (c < '0' || c > '9')) {
-      return false;
-    }
-  }
-
   return true;
 }
 
