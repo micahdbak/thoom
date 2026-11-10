@@ -44,7 +44,7 @@ class Scene {
 
   void create_object(const std::string& id, const std::string& options);
 
-  void register_gid_object(Object* object);
+  bool register_gid_object(Object* object);
   void unregister_gid_object(Object* object);
 
   Object* find_object(thoom_lid lid);

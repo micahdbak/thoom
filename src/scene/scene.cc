@@ -129,22 +129,22 @@ void Scene::create_object(const std::string& id, const std::string& options) {
   this->spawn_object(it->second, options);
 }
 
-void Scene::register_gid_object(Object* object) {
+bool Scene::register_gid_object(Object* object) {
   if (object == nullptr) {
-    return;
+    return false;
   }
 
   if (!object->replicated) {
-    if (object->gid != THOOM_GID_NULL ||
+    if (object->gid != THOOM_GID_INVALID ||
         object->owner_pid != THOOM_PID_INVALID) {
       LOG(FATAL) << "Scene::register_gid_object error: local object has "
                     "network identity";
     }
 
-    return;
+    return true;
   }
 
-  if (object->gid == THOOM_GID_NULL) {
+  if (object->gid == THOOM_GID_INVALID) {
     LOG(FATAL)
         << "Scene::register_gid_object error: replicated object has no gid";
   }
@@ -154,11 +154,11 @@ void Scene::register_gid_object(Object* object) {
         << "Scene::register_gid_object error: replicated object has no owner";
   }
 
-  this->objects_by_gid[object->gid] = object;
+  return this->objects_by_gid.emplace(object->gid, object).second;
 }
 
 void Scene::unregister_gid_object(Object* object) {
-  if (object == nullptr || object->gid == THOOM_GID_NULL) {
+  if (object == nullptr || object->gid == THOOM_GID_INVALID) {
     return;
   }
 
@@ -354,14 +354,28 @@ void Scene::create_new_objects() {
 }
 
 Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
-  // Objects take their gid in the constructor, so constructors can already
-  // reference their own object. Replication is decided by the definition.
-  bool was_spawning_replicated = Object::spawning_replicated;
-  Object::spawning_replicated = def.replicated;
+  // The lid is issued once per process, so exhausting it would reuse a gid.
+  if (Object::next_lid == THOOM_LID_MAX) {
+    LOG(FATAL) << "Scene::spawn_object error: no lids remain, so no new id "
+                  "can be unique";
+  }
+
+  if (def.replicated && this->local_pid == THOOM_PID_INVALID) {
+    LOG(ERROR) << "Scene::spawn_object error: '" << def.id
+               << "' needs a pid to take its id from";
+    return nullptr;
+  }
+
+  // Objects take their identity in the constructor, so constructors can
+  // already reference their own object. Replication is decided by the
+  // definition, and the owner starts as the peer that creates it.
+  Object::SpawnIdentity previous = Object::spawning_identity;
+  Object::spawning_identity.replicated = def.replicated;
+  Object::spawning_identity.pid = this->local_pid;
 
   Object* object = def.create_object(this, options);
 
-  Object::spawning_replicated = was_spawning_replicated;
+  Object::spawning_identity = previous;
 
   if (object == nullptr) {
     LOG(ERROR) << "Scene::spawn_object error: '" << def.id
@@ -374,14 +388,15 @@ Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
     return nullptr;
   }
 
-  if (object->replicated && object->owner_pid == THOOM_PID_INVALID) {
-    object->owner_pid = this->local_pid;
+  if (!this->register_gid_object(object)) {
+    LOG(ERROR) << "Scene::spawn_object error: '" << def.id << "' repeated gid "
+               << object->gid;
+    delete object;
+    return nullptr;
   }
 
   this->object_lists[def.order].push_back(object);
-
   this->objects_by_lid[object->lid] = object;
-  this->register_gid_object(object);
 
   return object;
 }

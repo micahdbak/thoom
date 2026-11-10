@@ -14,13 +14,19 @@ enum ObjectOrder {
 
 class Object {
  public:
+  struct SpawnIdentity {
+    bool replicated;
+    thoom_pid pid;
+  };
+
   Object() : lid(next_lid++) {
-    if (!spawning_replicated) {
+    if (!spawning_identity.replicated) {
       return;
     }
 
     this->replicated = true;
-    this->gid = next_gid++;
+    this->owner_pid = spawning_identity.pid;
+    this->gid = THOOM_GID_COMPOSE(spawning_identity.pid, this->lid);
   }
   virtual ~Object() = default;
 
@@ -29,7 +35,7 @@ class Object {
   virtual void save_data() {}
 
   thoom_lid lid;
-  thoom_gid gid = THOOM_GID_NULL;
+  thoom_gid gid = THOOM_GID_INVALID;
 
   thoom_pid owner_pid = THOOM_PID_INVALID;
   bool fixed_owner = false;
@@ -37,11 +43,9 @@ class Object {
 
   bool deleted = false;
 
-  inline static bool spawning_replicated = false;
+  inline static SpawnIdentity spawning_identity = {false, THOOM_PID_INVALID};
 
- private:
   inline static thoom_lid next_lid = 0;
-  inline static thoom_gid next_gid = 1;
 };
 
 struct ObjectRequest {

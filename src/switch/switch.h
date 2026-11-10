@@ -141,7 +141,7 @@ class Switch {
   bool room_open = false;
   std::string token;
   thoom_pid local_pid = THOOM_PID_INVALID;
-  uint64_t next_pid = 1;
+  thoom_pid next_pid = 1;
 
   Peer peers[kSwitchMaxPeers];
 

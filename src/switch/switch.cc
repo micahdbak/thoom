@@ -371,6 +371,11 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
     return;
   }
 
+  if (this->next_pid == THOOM_PID_INVALID) {
+    this->refuse(peer, kReasonFull);
+    return;
+  }
+
   const thoom_pid pid = this->next_pid++;
 
   ByteWriter writer;

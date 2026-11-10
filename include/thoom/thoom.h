@@ -8,17 +8,22 @@
 extern "C" {
 #endif
 
-typedef uint64_t thoom_lid;
+typedef uint32_t thoom_pid;
+typedef uint32_t thoom_lid;
 typedef uint64_t thoom_gid;
-typedef uint64_t thoom_pid;
 
-#define THOOM_LID_MAX ((thoom_lid)UINT64_MAX)
+#define THOOM_GID_COMPOSE(pid, lid) \
+  ((((thoom_gid)(pid)) << 32) | ((thoom_gid)(lid) & 0xFFFFFFFFu))
 
-#define THOOM_GID_NULL ((thoom_gid)0)
-#define THOOM_GID_MAX ((thoom_gid)UINT64_MAX)
+#define THOOM_GID_PID(gid) ((thoom_pid)(((thoom_gid)(gid)) >> 32))
+#define THOOM_GID_LID(gid) ((thoom_lid)((gid) & 0xFFFFFFFFu))
 
 #define THOOM_PID_HOST ((thoom_pid)0)
-#define THOOM_PID_INVALID (~(thoom_pid)0)
+#define THOOM_PID_INVALID ((thoom_pid)UINT32_MAX)
+
+#define THOOM_LID_MAX ((thoom_lid)UINT32_MAX)
+
+#define THOOM_GID_INVALID ((thoom_gid)UINT64_MAX)
 
 struct hud_def {
   void (*draw)(void* user);
