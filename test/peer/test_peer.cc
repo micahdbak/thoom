@@ -138,6 +138,56 @@ TEST(Peer, TwoInstancesConnectExchangeAndClose) {
   EXPECT_EQ(thoom::Peer::instance, nullptr);
 }
 
+TEST(Peer, SecondGuestJoinsAfterFirstLeaves) {
+  ASSERT_EQ(SDL_setenv_unsafe("THOOM_SIGNALLING_URL", LOCAL_SIGNALLING_URL, 0),
+            0);
+
+  thoom::Peer host(false);
+  host.set_offerer(false);
+
+  ASSERT_TRUE(
+      wait_until([&host] { return !host.get_connection_code().empty(); },
+                 kConnectTimeoutMs))
+      << "the host never got a connection code. Is a signalling server "
+         "running on localhost:8080?";
+
+  const std::string code = host.get_connection_code();
+
+  {
+    thoom::Peer guest(true);
+    guest.set_offerer(true);
+    guest.set_connection_code(code);
+
+    ASSERT_TRUE(wait_until(
+        [&host, &guest] {
+          return host.get_state() == thoom::Peer::kStateConnected &&
+                 guest.get_state() == thoom::Peer::kStateConnected;
+        },
+        kConnectTimeoutMs))
+        << "the first guest never connected. Is a signalling server running "
+           "on localhost:8080?";
+  }
+
+  ASSERT_TRUE(wait_until(
+      [&host] { return host.get_state() != thoom::Peer::kStateConnected; },
+      kLeaveTimeoutMs))
+      << "the host did not notice the first guest leaving";
+
+  thoom::Peer second(true);
+  second.set_offerer(true);
+  second.set_connection_code(code);
+
+  EXPECT_TRUE(wait_until(
+      [&host, &second] {
+        return host.get_state() == thoom::Peer::kStateConnected &&
+               second.get_state() == thoom::Peer::kStateConnected;
+      },
+      kConnectTimeoutMs))
+      << "the second guest never joined the same code after the first left: "
+         "the host is "
+      << host.get_state() << " and the guest is " << second.get_state();
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
