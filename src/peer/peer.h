@@ -6,9 +6,9 @@
 #include <string>
 #include <thread>
 
+#include "peer/queue.h"
 #include "switch/switch.h"
 #include "thoom/thoom.h"
-#include "utils/queue.h"
 
 #define MSG_USE_ITEM '0'
 #define MSG_TOSS_ITEM '1'
