@@ -1,8 +1,4 @@
-# peer depends on this; keep separate from below list
-add_subdirectory(webrtc)
-
 add_subdirectory(audio)
-add_subdirectory(comms)
 add_subdirectory(hud)
 add_subdirectory(input)
 add_subdirectory(map)
@@ -11,6 +7,8 @@ add_subdirectory(renderer)
 add_subdirectory(save)
 add_subdirectory(scene)
 add_subdirectory(sprite)
+add_subdirectory(switch)
 add_subdirectory(texture)
 add_subdirectory(utils)
+add_subdirectory(webrtc)
 add_subdirectory(window)

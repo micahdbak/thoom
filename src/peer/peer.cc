@@ -5,7 +5,6 @@
 #include <string>
 
 #include "absl/log/log.h"
-#include "peer/peer_thread.h"
 #include "thoom/thoom.h"
 
 #define PEER_GUEST_PID ((thoom_pid)1)
@@ -31,19 +30,15 @@ void Peer::quit() {
   Peer::instance = nullptr;
 }
 
-Peer::Peer(bool offerer) {
-  this->set_pid(offerer ? PEER_GUEST_PID : THOOM_PID_HOST);
-  this->thread = new PeerThread(this, offerer);
-}
+// TODO(micahdbak): the old protocol is gone, so this class is a no-op shell
+// that keeps the game building until the game switches to the Switch and the
+// class is deleted with the peer game objects.
+Peer::Peer(bool offerer) { this->set_offerer(offerer); }
 
-Peer::~Peer() {
-  delete this->thread;
-  this->thread = nullptr;
-}
+Peer::~Peer() = default;
 
 void Peer::set_offerer(bool offerer) {
   this->set_pid(offerer ? PEER_GUEST_PID : THOOM_PID_HOST);
-  this->thread->set_offerer(offerer);
 }
 
 thoom_pid Peer::get_pid() const { return this->pid.load(); }

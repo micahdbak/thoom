@@ -1,9 +1,6 @@
-#include "comms/messages.h"
+#include "switch/messages.h"
 
-#include "comms/bytes.h"
-
-// Each reader consumes the whole payload. A message with extra bytes is
-// malformed, so a new field cannot be ignored by an older reader.
+#include "switch/bytes.h"
 
 namespace thoom {
 

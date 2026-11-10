@@ -1,12 +1,9 @@
-#include "comms/bytes.h"
+#include "switch/bytes.h"
 
 #include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
-
-// The wire is little-endian. Upper layers read and write through these
-// classes so no other file carries an opinion about byte order.
 
 static const uint8_t EMPTY_BYTE = 0;
 

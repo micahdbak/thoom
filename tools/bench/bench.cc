@@ -9,10 +9,6 @@
 #include <string>
 #include <vector>
 
-// Payloads are deterministic in (seed, index) and carry the index in their
-// first four bytes, so a receiver can verify a payload without knowing which
-// one was sent and a corrupt or reordered message is caught either way.
-
 #define PAYLOAD_INDEX_SIZE 4
 
 static uint64_t mix(uint64_t seed, uint32_t index) {
@@ -155,6 +151,8 @@ uint64_t bench_random(uint64_t* state) {
   return *state;
 }
 
+// Deterministic in (seed, index), with the index in the first four bytes, so a
+// receiver verifies a payload without being told which one it should be.
 std::vector<uint8_t> make_payload(uint64_t seed, uint32_t index,
                                   const BenchOptions& options) {
   const uint32_t body = body_size(seed, index, options);

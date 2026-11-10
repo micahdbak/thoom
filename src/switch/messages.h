@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "comms/bytes.h"
+#include "switch/bytes.h"
 
 namespace thoom {
 

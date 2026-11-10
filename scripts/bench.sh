@@ -13,5 +13,4 @@ if [ -z "${THOOM_SIGNALLING_URL:-}" ]; then
   fi
 fi
 
-./build/bin/webrtc_bench "$@"
-./build/bin/comms_bench "$@"
+./build/bin/switch_bench "$@"

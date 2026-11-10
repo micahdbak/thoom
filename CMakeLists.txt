@@ -52,7 +52,6 @@ add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
 set(THOOM_ENGINE_LIBS
   thoom_audio
-  thoom_comms
   thoom_hud
   thoom_input
   thoom_map
@@ -61,6 +60,7 @@ set(THOOM_ENGINE_LIBS
   thoom_save
   thoom_scene
   thoom_sprite
+  thoom_switch
   thoom_texture
   thoom_utils
   thoom_webrtc

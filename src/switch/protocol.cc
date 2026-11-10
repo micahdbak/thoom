@@ -1,15 +1,7 @@
-#include "comms/protocol.h"
+#include "switch/protocol.h"
 
 #include <cstdint>
 #include <vector>
-
-// A frame is a 7-byte header followed by a payload:
-//
-//   version (1) | kind (1) | flags (1) | payload length (4, little-endian)
-//
-// The length must match the bytes that arrived exactly, so truncation and
-// trailing bytes are both malformed. Semantics such as the version check and
-// the flag rules belong to the session.
 
 #define VERSION_OFFSET 0
 #define KIND_OFFSET 1
@@ -18,6 +10,8 @@
 
 namespace thoom {
 
+// The header's length field must equal the payload bytes that arrived, so both
+// truncation and trailing bytes come back as kDecodeLength.
 DecodeResult decode_frame(const void* data, uint32_t size, Frame* frame) {
   const uint8_t* bytes = static_cast<const uint8_t*>(data);
 
