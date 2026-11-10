@@ -2,8 +2,6 @@
 
 #include <rtc/rtc.h>
 
-#include <chrono>
-#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
@@ -41,8 +39,6 @@ bool WebRtcSignaller::connect(const std::string& code, bool offerer) {
     this->events.clear();
     this->opened = false;
     this->closed = false;
-    this->connected_once = false;
-    this->failed_attempt = false;
   }
 
   const char* override_url = getenv(SIGNALLING_URL_ENV);
@@ -91,14 +87,12 @@ void WebRtcSignaller::poll() {
 
     if (this->opened) {
       this->opened = false;
-      this->connected_once = true;
       this->state_value = WebRtcSignaller::kConnected;
     }
 
     if (this->closed) {
       this->closed = false;
       was_closed = true;
-      this->failed_attempt = !this->connected_once;
     }
 
     this->assemble_events();
@@ -110,12 +104,10 @@ void WebRtcSignaller::poll() {
   if (this->ws >= 0 && this->state_value == WebRtcSignaller::kConnecting) {
     if (rtcIsOpen(this->ws)) {
       std::lock_guard<std::mutex> guard(this->mutex);
-      this->connected_once = true;
       this->state_value = WebRtcSignaller::kConnected;
     } else if (rtcIsClosed(this->ws)) {
       std::lock_guard<std::mutex> guard(this->mutex);
       was_closed = true;
-      this->failed_attempt = !this->connected_once;
     }
   }
 
@@ -140,8 +132,6 @@ bool WebRtcSignaller::send_candidate(const std::string& cand,
          this->send_message(mid);
 }
 
-bool WebRtcSignaller::send_fail() { return this->send_message(FAIL_TAG); }
-
 bool WebRtcSignaller::receive(Event* event) {
   std::lock_guard<std::mutex> guard(this->mutex);
 
@@ -154,19 +144,9 @@ bool WebRtcSignaller::receive(Event* event) {
   return true;
 }
 
-void WebRtcSignaller::wait(uint32_t timeout_ms) {
-  std::unique_lock<std::mutex> lock(this->mutex);
-  this->cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] {
-    return !this->events.empty() || !this->raw.empty() || this->opened ||
-           this->closed;
-  });
-}
-
 WebRtcSignaller::State WebRtcSignaller::state() const {
   return this->state_value;
 }
-
-bool WebRtcSignaller::failed() const { return this->failed_attempt; }
 
 std::string WebRtcSignaller::make_code() {
   std::random_device rd;
@@ -199,14 +179,12 @@ void WebRtcSignaller::on_open(int, void* user_ptr) {
   WebRtcSignaller* signaller = static_cast<WebRtcSignaller*>(user_ptr);
   std::lock_guard<std::mutex> guard(signaller->mutex);
   signaller->opened = true;
-  signaller->cv.notify_one();
 }
 
 void WebRtcSignaller::on_close(int, void* user_ptr) {
   WebRtcSignaller* signaller = static_cast<WebRtcSignaller*>(user_ptr);
   std::lock_guard<std::mutex> guard(signaller->mutex);
   signaller->closed = true;
-  signaller->cv.notify_one();
 }
 
 void WebRtcSignaller::on_error(int, const char* error, void* user_ptr) {
@@ -214,7 +192,6 @@ void WebRtcSignaller::on_error(int, const char* error, void* user_ptr) {
   WebRtcSignaller* signaller = static_cast<WebRtcSignaller*>(user_ptr);
   std::lock_guard<std::mutex> guard(signaller->mutex);
   signaller->closed = true;
-  signaller->cv.notify_one();
 }
 
 void WebRtcSignaller::on_message(int, const char* message, int size,
@@ -241,7 +218,6 @@ bool WebRtcSignaller::send_message(const std::string& message) {
 void WebRtcSignaller::push_message(const std::string& message) {
   std::lock_guard<std::mutex> guard(this->mutex);
   this->raw.push_back(message);
-  this->cv.notify_one();
 }
 
 void WebRtcSignaller::assemble_events() {

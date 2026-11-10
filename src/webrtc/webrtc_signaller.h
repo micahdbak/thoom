@@ -1,7 +1,5 @@
 #pragma once
 
-#include <condition_variable>
-#include <cstdint>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -44,15 +42,9 @@ class WebRtcSignaller {
 
   bool send_candidate(const std::string& cand, const std::string& mid);
 
-  bool send_fail();
-
   bool receive(Event* event);
 
-  void wait(uint32_t timeout_ms);
-
   State state() const;
-
-  bool failed() const;
 
   static std::string make_code();
 
@@ -77,13 +69,10 @@ class WebRtcSignaller {
   State state_value = kNotConnected;
 
   std::mutex mutex;
-  std::condition_variable cv;
   std::deque<std::string> raw;
   std::deque<Event> events;
   bool opened = false;
   bool closed = false;
-  bool connected_once = false;
-  bool failed_attempt = false;
 };
 
 };  // namespace thoom
