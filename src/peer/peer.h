@@ -4,7 +4,9 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <thread>
 
+#include "switch/switch.h"
 #include "thoom/thoom.h"
 #include "utils/queue.h"
 
@@ -60,11 +62,33 @@ class Peer {
   MutexQueue<std::string> recv_queue;
 
  private:
+  struct Command {
+    enum Kind {
+      kRestart = 0,
+      kJoin,
+    };
+
+    Kind kind;
+    std::string code;
+  };
+
+  void run();
+  void begin_session();
+  void poll_switch();
+  void publish_state();
+  void store_code(const std::string& code);
+
   std::atomic<thoom_pid> pid{THOOM_PID_HOST};
   std::atomic<uint64_t> state{kStateNoConnection};
+  std::atomic<bool> running{true};
+  std::atomic<bool> offerer{false};
 
   std::string connection_code;
   std::mutex connection_code_mutex;
+
+  Switch* net = nullptr;
+  MutexQueue<Command> commands;
+  std::thread worker;
 };
 
 };  // namespace thoom
