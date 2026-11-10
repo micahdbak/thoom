@@ -60,6 +60,7 @@ set(THOOM_ENGINE_LIBS
   thoom_save
   thoom_scene
   thoom_sprite
+  thoom_switch
   thoom_texture
   thoom_utils
   thoom_webrtc

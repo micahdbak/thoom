@@ -4,13 +4,12 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <thread>
 
-#include "peer/message_queue.h"
+#include "peer/queue.h"
+#include "switch/switch.h"
 #include "thoom/thoom.h"
 
-// shared message codes between cheddar and feta
-
-// feta -> cheddar
 #define MSG_USE_ITEM '0'
 #define MSG_TOSS_ITEM '1'
 #define MSG_PUSH_HITBOX '2'
@@ -18,7 +17,6 @@
 #define MSG_EAT_CHEESE '4'
 #define MSG_IS_DOWN '5'
 
-// cheddar -> feta
 #define MSG_MAP 'a'
 #define MSG_SPRITE 'b'
 #define MSG_AUDIO 'c'
@@ -33,9 +31,6 @@
 #define MSG_COLLISION 'l'
 
 namespace thoom {
-
-// forward declared as peer_*.h includes libdatachannel headers
-class PeerThread;
 
 class Peer {
  public:
@@ -63,17 +58,37 @@ class Peer {
   std::string get_connection_code();
   void set_connection_code(std::string code);
 
-  MessageQueue send_queue;
-  MessageQueue recv_queue;
+  MutexQueue<std::string> send_queue;
+  MutexQueue<std::string> recv_queue;
 
  private:
+  struct Command {
+    enum Kind {
+      kRestart = 0,
+      kJoin,
+    };
+
+    Kind kind;
+    std::string code;
+  };
+
+  void run();
+  void begin_session();
+  void poll_switch();
+  void publish_state();
+  void store_code(const std::string& code);
+
   std::atomic<thoom_pid> pid{THOOM_PID_HOST};
   std::atomic<uint64_t> state{kStateNoConnection};
+  std::atomic<bool> running{true};
+  std::atomic<bool> offerer{false};
 
   std::string connection_code;
   std::mutex connection_code_mutex;
 
-  PeerThread* thread = nullptr;
+  Switch* net = nullptr;
+  MutexQueue<Command> commands;
+  std::thread worker;
 };
 
 };  // namespace thoom
