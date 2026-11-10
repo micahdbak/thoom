@@ -74,8 +74,6 @@ void receive_all(thoom::Peer* peer, char side, int* received) {
   }
 }
 
-// The newer cases share these three steps: start the room, connect a guest to
-// it, and wait for the host to see a guest come or go.
 std::string start_room(thoom::Peer* host) {
   host->set_offerer(false);
 
@@ -263,7 +261,6 @@ TEST(Peer, GuestRejoinsAfterReset) {
   ASSERT_TRUE(connect_guest(&host, &guest, code));
   exchange(&host, &guest, "first");
 
-  // This is how the game drops a session and returns to the code grid.
   guest.set_state(thoom::Peer::kStateTryReset);
   EXPECT_TRUE(wait_until(
       [&guest] { return guest.get_state() == thoom::Peer::kStateNoConnection; },
