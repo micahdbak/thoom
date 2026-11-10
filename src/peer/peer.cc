@@ -124,7 +124,7 @@ void Peer::begin_session() {
 
   if (!this->offerer.load()) {
     if (this->net->host(Switch::Options())) {
-      this->store_code(this->net->token());
+      this->store_code(this->net->get_token());
     } else {
       LOG(ERROR) << "Peer: a room could not be opened";
     }
@@ -136,7 +136,7 @@ void Peer::begin_session() {
 void Peer::poll_switch() {
   this->net->poll();
 
-  const thoom_pid local = this->net->local_pid();
+  const thoom_pid local = this->net->get_local_pid();
   if (local != THOOM_PID_INVALID) {
     this->set_pid(local);
   }
@@ -172,7 +172,7 @@ void Peer::publish_state() {
     return;
   }
 
-  const Switch::State state = this->net->state();
+  const Switch::State state = this->net->get_state();
 
   if (state == Switch::kListening || state == Switch::kJoining) {
     this->state.store(kStateWaitingForPeer);

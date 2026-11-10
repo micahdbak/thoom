@@ -137,7 +137,7 @@ bool WebRtcSwitch::send_raw(PeerHandle, const uint8_t* data, uint32_t size,
 
 void WebRtcSwitch::close_peer(PeerHandle) {
   const bool signalling =
-      this->room.signaller.state() != WebRtcSignaller::kNotConnected;
+      this->room.signaller.get_state() != WebRtcSignaller::kNotConnected;
 
   this->teardown_link();
 
@@ -196,7 +196,7 @@ void WebRtcSwitch::poll_room() {
   this->room.signaller.poll();
 
   if (this->room.state == Room::kSignalling) {
-    const WebRtcSignaller::State state = this->room.signaller.state();
+    const WebRtcSignaller::State state = this->room.signaller.get_state();
 
     if (state == WebRtcSignaller::kNotConnected) {
       this->fail_room();
@@ -233,7 +233,7 @@ void WebRtcSwitch::poll_room() {
 }
 
 void WebRtcSwitch::ping() {
-  if (this->room.signaller.state() != WebRtcSignaller::kConnected) {
+  if (this->room.signaller.get_state() != WebRtcSignaller::kConnected) {
     return;
   }
 
@@ -276,7 +276,7 @@ bool WebRtcSwitch::apply_event(const WebRtcSignaller::Event& event) {
 }
 
 bool WebRtcSwitch::signal_outbox() {
-  if (this->room.signaller.state() != WebRtcSignaller::kConnected) {
+  if (this->room.signaller.get_state() != WebRtcSignaller::kConnected) {
     return true;
   }
 
@@ -425,7 +425,7 @@ void WebRtcSwitch::drop_link() {
   // The signaller outlives a handshake that never finished, so a host that
   // loses such a peer can keep its room open for another attempt.
   const bool room_alive =
-      this->room.signaller.state() != WebRtcSignaller::kNotConnected;
+      this->room.signaller.get_state() != WebRtcSignaller::kNotConnected;
 
   this->teardown_link();
   this->on_drop(LINK_HANDLE, kReasonTransport);

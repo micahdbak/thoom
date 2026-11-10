@@ -36,7 +36,7 @@ class WebRtcSignaller {
   bool connect(const std::string& code);
   void disconnect();
   void poll();
-  State state() const;
+  State get_state() const;
 
   bool send_ping();
   bool send_description(const std::string& sdp, const std::string& type);
@@ -54,7 +54,7 @@ class WebRtcSignaller {
   void assemble_events();
 
   int ws = -1;
-  State state_value = kNotConnected;
+  State state = kNotConnected;
 
   std::mutex mutex;
   std::deque<std::string> raw;

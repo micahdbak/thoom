@@ -20,49 +20,47 @@ static int64_t now_ms() {
 }
 
 bool Switch::host(const Options& options) {
-  if (this->state_value != kIdle) {
+  if (this->state != kIdle) {
     return false;
   }
 
   this->options = options;
   this->role = kRoleHost;
-  this->local_pid_value = THOOM_PID_HOST;
+  this->local_pid = THOOM_PID_HOST;
 
-  std::string token;
-  if (!this->open_room(&token) || token.empty()) {
-    this->state_value = kClosed;
-    this->reason_value = kReasonTransport;
+  if (!this->open_room(&this->token) || this->token.empty()) {
+    this->state = kClosed;
+    this->reason = kReasonTransport;
     return false;
   }
 
-  this->token_value = token;
   this->room_open = true;
-  this->state_value = kListening;
+  this->state = kListening;
   return true;
 }
 
-bool Switch::join(const Options& options, const char* token) {
-  if (this->state_value != kIdle || token == nullptr || token[0] == '\0') {
+bool Switch::join(const Options& options, const char* code) {
+  if (this->state != kIdle || code == nullptr || code[0] == '\0') {
     return false;
   }
 
   this->options = options;
   this->role = kRoleGuest;
-  this->token_value = token;
+  this->token = code;
 
-  if (!this->enter_room(this->token_value)) {
-    this->state_value = kClosed;
-    this->reason_value = kReasonTransport;
+  if (!this->enter_room(this->token)) {
+    this->state = kClosed;
+    this->reason = kReasonTransport;
     return false;
   }
 
   this->room_open = true;
-  this->state_value = kJoining;
+  this->state = kJoining;
   return true;
 }
 
 void Switch::poll() {
-  if (this->state_value == kClosed) {
+  if (this->state == kClosed) {
     this->shutdown();
     return;
   }
@@ -70,22 +68,22 @@ void Switch::poll() {
   this->poll_backend();
   this->expire_peers();
 
-  if (this->state_value == kClosed) {
+  if (this->state == kClosed) {
     this->shutdown();
   }
 }
 
 void Switch::close() {
-  if (this->state_value != kClosed) {
+  if (this->state != kClosed) {
     for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
       if (this->peers[i].state == kPeerReady) {
         this->send_frame(&this->peers[i], kFrameBye, nullptr, 0, true);
       }
     }
 
-    this->state_value = kClosed;
-    if (this->reason_value == kReasonNone) {
-      this->reason_value = kReasonClosed;
+    this->state = kClosed;
+    if (this->reason == kReasonNone) {
+      this->reason = kReasonClosed;
     }
   }
 
@@ -93,7 +91,7 @@ void Switch::close() {
 }
 
 bool Switch::send(const Datagram& datagram) {
-  if (this->state_value != kListening && this->state_value != kJoined) {
+  if (this->state != kListening && this->state != kJoined) {
     return false;
   }
 
@@ -127,13 +125,13 @@ bool Switch::next_event(Event* event) {
   return true;
 }
 
-Switch::State Switch::state() const { return this->state_value; }
+Switch::State Switch::get_state() const { return this->state; }
 
-Switch::Reason Switch::reason() const { return this->reason_value; }
+Switch::Reason Switch::get_reason() const { return this->reason; }
 
-const char* Switch::token() const { return this->token_value.c_str(); }
+const char* Switch::get_token() const { return this->token.c_str(); }
 
-thoom_pid Switch::local_pid() const { return this->local_pid_value; }
+thoom_pid Switch::get_local_pid() const { return this->local_pid; }
 
 uint32_t Switch::peer_count() const { return this->ready_count(); }
 
@@ -161,7 +159,7 @@ bool Switch::peer_ready(thoom_pid pid) const {
 }
 
 void Switch::on_open(PeerHandle handle) {
-  if (this->state_value != kListening && this->state_value != kJoining) {
+  if (this->state != kListening && this->state != kJoining) {
     this->close_peer(handle);
     return;
   }
@@ -200,7 +198,7 @@ void Switch::on_open(PeerHandle handle) {
 
 void Switch::on_datagram(PeerHandle handle, const void* data, uint32_t size,
                          bool reliable) {
-  if (this->state_value == kClosed) {
+  if (this->state == kClosed) {
     return;
   }
 
@@ -292,12 +290,12 @@ void Switch::shutdown() {
 }
 
 void Switch::finish(Reason reason) {
-  if (this->state_value == kClosed) {
+  if (this->state == kClosed) {
     return;
   }
 
-  this->state_value = kClosed;
-  this->reason_value = reason;
+  this->state = kClosed;
+  this->reason = reason;
 }
 
 void Switch::refuse(Peer* peer, Reason reason) {
@@ -406,10 +404,10 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
     return;
   }
 
-  this->local_pid_value = pid;
+  this->local_pid = pid;
   peer->pid = THOOM_PID_HOST;
   peer->state = kPeerReady;
-  this->state_value = kJoined;
+  this->state = kJoined;
   this->push_event(Event::kJoin, THOOM_PID_HOST, kReasonNone);
 }
 

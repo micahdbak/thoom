@@ -54,7 +54,7 @@ bool WebRtcSignaller::valid_code(const std::string& code) {
 }
 
 bool WebRtcSignaller::connect(const std::string& code) {
-  if (this->state_value != WebRtcSignaller::kNotConnected || this->ws >= 0) {
+  if (this->state != WebRtcSignaller::kNotConnected || this->ws >= 0) {
     LOG(WARNING) << "WebRtcSignaller::connect: already connecting or connected";
     return false;
   }
@@ -85,7 +85,7 @@ bool WebRtcSignaller::connect(const std::string& code) {
   rtcSetErrorCallback(this->ws, WebRtcSignaller::on_error);
   rtcSetMessageCallback(this->ws, WebRtcSignaller::on_message);
 
-  this->state_value = WebRtcSignaller::kConnecting;
+  this->state = WebRtcSignaller::kConnecting;
   return true;
 }
 
@@ -102,7 +102,7 @@ void WebRtcSignaller::disconnect() {
     this->ws = -1;
   }
 
-  this->state_value = WebRtcSignaller::kNotConnected;
+  this->state = WebRtcSignaller::kNotConnected;
 }
 
 void WebRtcSignaller::poll() {
@@ -113,7 +113,7 @@ void WebRtcSignaller::poll() {
 
     if (this->opened) {
       this->opened = false;
-      this->state_value = WebRtcSignaller::kConnected;
+      this->state = WebRtcSignaller::kConnected;
     }
 
     if (this->closed) {
@@ -127,10 +127,10 @@ void WebRtcSignaller::poll() {
   // rtcCreateWebSocket starts connecting before a callback can be installed, so
   // a fast handshake can finish before on_open is registered. Query the socket
   // so a missed event cannot leave the signaller connecting forever.
-  if (this->ws >= 0 && this->state_value == WebRtcSignaller::kConnecting) {
+  if (this->ws >= 0 && this->state == WebRtcSignaller::kConnecting) {
     if (rtcIsOpen(this->ws)) {
       std::lock_guard<std::mutex> guard(this->mutex);
-      this->state_value = WebRtcSignaller::kConnected;
+      this->state = WebRtcSignaller::kConnected;
     } else if (rtcIsClosed(this->ws)) {
       std::lock_guard<std::mutex> guard(this->mutex);
       was_closed = true;
@@ -144,8 +144,8 @@ void WebRtcSignaller::poll() {
   }
 }
 
-WebRtcSignaller::State WebRtcSignaller::state() const {
-  return this->state_value;
+WebRtcSignaller::State WebRtcSignaller::get_state() const {
+  return this->state;
 }
 
 bool WebRtcSignaller::send_ping() { return this->send_message(PING_TAG); }
@@ -206,7 +206,7 @@ void WebRtcSignaller::on_message(int, const char* message, int size,
 }
 
 bool WebRtcSignaller::send_message(const std::string& message) {
-  if (this->state_value != WebRtcSignaller::kConnected || this->ws < 0) {
+  if (this->state != WebRtcSignaller::kConnected || this->ws < 0) {
     LOG(WARNING) << "WebRtcSignaller::send_message: not connected";
     return false;
   }

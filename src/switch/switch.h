@@ -61,7 +61,7 @@ class Switch {
   virtual ~Switch() = default;
 
   bool host(const Options& options);
-  bool join(const Options& options, const char* token);
+  bool join(const Options& options, const char* code);
   void poll();
   void close();
 
@@ -69,10 +69,10 @@ class Switch {
   bool receive(Datagram* datagram);
   bool next_event(Event* event);
 
-  State state() const;
-  Reason reason() const;
-  const char* token() const;
-  thoom_pid local_pid() const;
+  State get_state() const;
+  Reason get_reason() const;
+  const char* get_token() const;
+  thoom_pid get_local_pid() const;
   uint32_t peer_count() const;
   thoom_pid peer_pid(uint32_t index) const;
   bool peer_ready(thoom_pid pid) const;
@@ -135,12 +135,12 @@ class Switch {
   void push_event(Event::Kind kind, thoom_pid peer, Reason reason);
 
   Options options;
-  State state_value = kIdle;
-  Reason reason_value = kReasonNone;
+  State state = kIdle;
+  Reason reason = kReasonNone;
   uint8_t role = kRoleHost;
   bool room_open = false;
-  std::string token_value;
-  thoom_pid local_pid_value = THOOM_PID_INVALID;
+  std::string token;
+  thoom_pid local_pid = THOOM_PID_INVALID;
   uint64_t next_pid = 1;
 
   Peer peers[kSwitchMaxPeers];

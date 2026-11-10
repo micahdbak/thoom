@@ -58,27 +58,27 @@ TestedSwitch::Options make_options(uint32_t soft_cap = 2,
 }
 
 void expect_consistent(const TestedSwitch& sw) {
-  switch (sw.state()) {
+  switch (sw.get_state()) {
     case TestedSwitch::kIdle:
-      EXPECT_EQ(sw.reason(), TestedSwitch::kReasonNone);
+      EXPECT_EQ(sw.get_reason(), TestedSwitch::kReasonNone);
       EXPECT_EQ(sw.peer_count(), 0u);
-      EXPECT_EQ(sw.local_pid(), THOOM_PID_INVALID);
+      EXPECT_EQ(sw.get_local_pid(), THOOM_PID_INVALID);
       break;
     case TestedSwitch::kListening:
-      EXPECT_EQ(sw.local_pid(), THOOM_PID_HOST);
+      EXPECT_EQ(sw.get_local_pid(), THOOM_PID_HOST);
       break;
     case TestedSwitch::kJoining:
-      EXPECT_EQ(sw.local_pid(), THOOM_PID_INVALID);
+      EXPECT_EQ(sw.get_local_pid(), THOOM_PID_INVALID);
       EXPECT_EQ(sw.peer_count(), 0u);
       break;
     case TestedSwitch::kJoined:
-      EXPECT_NE(sw.local_pid(), THOOM_PID_HOST);
-      EXPECT_NE(sw.local_pid(), THOOM_PID_INVALID);
+      EXPECT_NE(sw.get_local_pid(), THOOM_PID_HOST);
+      EXPECT_NE(sw.get_local_pid(), THOOM_PID_INVALID);
       EXPECT_EQ(sw.peer_count(), 1u);
       EXPECT_EQ(sw.peer_pid(0), THOOM_PID_HOST);
       break;
     case TestedSwitch::kClosed:
-      EXPECT_NE(sw.reason(), TestedSwitch::kReasonNone);
+      EXPECT_NE(sw.get_reason(), TestedSwitch::kReasonNone);
       break;
   }
 
@@ -224,10 +224,10 @@ class SwitchTest : public ::testing::Test {
 TEST_F(SwitchTest, HostStartsListening) {
   ASSERT_TRUE(this->host.host(make_options()));
 
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
-  EXPECT_EQ(this->host.reason(), TestedSwitch::kReasonNone);
-  EXPECT_EQ(this->host.local_pid(), THOOM_PID_HOST);
-  EXPECT_STREQ(this->host.token(), "ROOM01");
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_reason(), TestedSwitch::kReasonNone);
+  EXPECT_EQ(this->host.get_local_pid(), THOOM_PID_HOST);
+  EXPECT_STREQ(this->host.get_token(), "ROOM01");
   EXPECT_EQ(this->host.peer_count(), 0u);
   expect_consistent(this->host);
 }
@@ -235,15 +235,15 @@ TEST_F(SwitchTest, HostStartsListening) {
 TEST_F(SwitchTest, HostOnlyFromIdle) {
   ASSERT_TRUE(this->host.host(make_options()));
   EXPECT_FALSE(this->host.host(make_options()));
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 }
 
 TEST_F(SwitchTest, HostOpenRoomFailure) {
   this->host.open_room_ok = false;
 
   EXPECT_FALSE(this->host.host(make_options()));
-  EXPECT_EQ(this->host.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->host.reason(), TestedSwitch::kReasonTransport);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->host.get_reason(), TestedSwitch::kReasonTransport);
   EXPECT_EQ(this->host.close_room_calls, 0);
 
   this->host.poll();
@@ -254,10 +254,10 @@ TEST_F(SwitchTest, HostOpenRoomFailure) {
 TEST_F(SwitchTest, GuestJoins) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kJoining);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonNone);
-  EXPECT_EQ(this->guest.local_pid(), THOOM_PID_INVALID);
-  EXPECT_STREQ(this->guest.token(), "ROOM01");
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoining);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonNone);
+  EXPECT_EQ(this->guest.get_local_pid(), THOOM_PID_INVALID);
+  EXPECT_STREQ(this->guest.get_token(), "ROOM01");
   EXPECT_EQ(this->guest.entered_token, "ROOM01");
   EXPECT_EQ(this->guest.peer_count(), 0u);
   expect_consistent(this->guest);
@@ -266,24 +266,24 @@ TEST_F(SwitchTest, GuestJoins) {
 TEST_F(SwitchTest, GuestTokenValidation) {
   EXPECT_FALSE(this->guest.join(make_options(), ""));
   EXPECT_FALSE(this->guest.join(make_options(), nullptr));
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kIdle);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonNone);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kIdle);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonNone);
   expect_consistent(this->guest);
 }
 
 TEST_F(SwitchTest, GuestOnlyFromIdle) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   EXPECT_FALSE(this->guest.join(make_options(), "ROOM02"));
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kJoining);
-  EXPECT_STREQ(this->guest.token(), "ROOM01");
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoining);
+  EXPECT_STREQ(this->guest.get_token(), "ROOM01");
 }
 
 TEST_F(SwitchTest, GuestEnterRoomFailure) {
   this->guest.enter_room_ok = false;
 
   EXPECT_FALSE(this->guest.join(make_options(), "ROOM01"));
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonTransport);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonTransport);
   EXPECT_EQ(this->guest.close_room_calls, 0);
   expect_consistent(this->guest);
 }
@@ -291,8 +291,8 @@ TEST_F(SwitchTest, GuestEnterRoomFailure) {
 TEST_F(SwitchTest, CloseFromIdle) {
   this->host.close();
 
-  EXPECT_EQ(this->host.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->host.reason(), TestedSwitch::kReasonClosed);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->host.get_reason(), TestedSwitch::kReasonClosed);
   EXPECT_EQ(this->host.close_room_calls, 0);
   expect_consistent(this->host);
 }
@@ -307,8 +307,8 @@ TEST_F(SwitchTest, CloseSendsByeAndClosesRoom) {
 
   this->host.close();
 
-  EXPECT_EQ(this->host.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->host.reason(), TestedSwitch::kReasonClosed);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->host.get_reason(), TestedSwitch::kReasonClosed);
   EXPECT_EQ(this->host.close_room_calls, 1);
   EXPECT_EQ(this->host.sent.size(), 1u);
   expect_frame(this->host, 0, kGuestHandle, kByeKind, {}, true);
@@ -330,7 +330,7 @@ TEST_F(SwitchTest, CloseIsIdempotent) {
   EXPECT_EQ(this->host.sent.size(), 1u);
   expect_frame(this->host, 0, kGuestHandle, kByeKind, {}, true);
   EXPECT_EQ(this->host.close_room_calls, 1);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kClosed);
 }
 
 TEST_F(SwitchTest, PollAfterCloseDoesNothing) {
@@ -357,13 +357,13 @@ TEST_F(SwitchTest, PollCallsBackendOnce) {
 
 TEST_F(SwitchTest, HostOpenBeforeListeningClosesHandle) {
   this->host.open(kGuestHandle);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kIdle);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kIdle);
   EXPECT_EQ(this->host.closed.size(), 1u);
   EXPECT_EQ(this->host.closed[0], kGuestHandle);
 
   this->host.close();
   this->host.open(kUnknownHandle);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kClosed);
   EXPECT_EQ(this->host.closed.size(), 2u);
   EXPECT_EQ(this->host.closed[1], kUnknownHandle);
 }
@@ -373,7 +373,7 @@ TEST_F(SwitchTest, HostOpenAddsHandshakingPeer) {
 
   this->host.open(kGuestHandle);
 
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
   EXPECT_EQ(this->host.peer_count(), 0u);
   EXPECT_TRUE(this->host.sent.empty());
   expect_no_events(&this->host);
@@ -462,7 +462,7 @@ TEST_F(SwitchTest, HostRejectsMalformedFrames) {
 
     expect_reject(host, 0, kGuestHandle, TestedSwitch::kReasonProtocol);
     expect_no_events(&host);
-    EXPECT_EQ(host.state(), TestedSwitch::kListening);
+    EXPECT_EQ(host.get_state(), TestedSwitch::kListening);
     EXPECT_EQ(host.peer_count(), 0u);
 
     host.poll();
@@ -481,7 +481,7 @@ TEST_F(SwitchTest, HostRejectsFullAtSoftCapOne) {
 
   this->host.poll();
   EXPECT_EQ(this->host.closed.size(), 1u);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 }
 
 TEST_F(SwitchTest, HostRejectsSecondGuestWhenFull) {
@@ -519,7 +519,7 @@ TEST_F(SwitchTest, HostSecondHelloAfterReadyRefused) {
 
   this->host.poll();
   EXPECT_EQ(this->host.closed.size(), 1u);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 }
 
 TEST_F(SwitchTest, HostAbandonsPeerWhenWelcomeCannotSend) {
@@ -531,7 +531,7 @@ TEST_F(SwitchTest, HostAbandonsPeerWhenWelcomeCannotSend) {
 
   expect_no_events(&this->host);
   EXPECT_EQ(this->host.peer_count(), 0u);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 
   this->host.poll();
   EXPECT_EQ(this->host.closed.size(), 1u);
@@ -545,7 +545,7 @@ TEST_F(SwitchTest, HostHandshakeTimeout) {
   this->host.poll();
 
   expect_no_events(&this->host);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
   EXPECT_EQ(this->host.closed.size(), 1u);
   EXPECT_EQ(this->host.closed[0], kGuestHandle);
   EXPECT_EQ(this->host.peer_count(), 0u);
@@ -576,7 +576,7 @@ TEST_F(SwitchTest, HostByeDuringHandshake) {
   EXPECT_EQ(this->host.closed.size(), 1u);
   EXPECT_EQ(this->host.closed[0], kGuestHandle);
   EXPECT_EQ(this->host.peer_count(), 0u);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 }
 
 TEST_F(SwitchTest, HostIgnoresUnknownHandles) {
@@ -587,7 +587,7 @@ TEST_F(SwitchTest, HostIgnoresUnknownHandles) {
 
   EXPECT_TRUE(this->host.sent.empty());
   expect_no_events(&this->host);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 }
 
 TEST_F(SwitchTest, GuestOpenSendsHello) {
@@ -597,7 +597,7 @@ TEST_F(SwitchTest, GuestOpenSendsHello) {
   ASSERT_EQ(this->guest.sent.size(), 1u);
   expect_frame(this->guest, 0, kHostHandle, kHelloKind, {thoom::kRoleGuest},
                true);
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kJoining);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoining);
   EXPECT_EQ(this->guest.peer_count(), 0u);
 }
 
@@ -610,7 +610,7 @@ TEST_F(SwitchTest, GuestSecondOpenClosesExtra) {
   EXPECT_EQ(this->guest.closed.size(), 1u);
   EXPECT_EQ(this->guest.closed[0], kUnknownHandle);
   EXPECT_EQ(this->guest.sent.size(), 1u);
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kJoining);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoining);
 }
 
 TEST_F(SwitchTest, GuestWelcomeJoins) {
@@ -621,8 +621,8 @@ TEST_F(SwitchTest, GuestWelcomeJoins) {
 
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kJoined);
-  EXPECT_EQ(this->guest.local_pid(), 5);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
+  EXPECT_EQ(this->guest.get_local_pid(), 5);
   EXPECT_EQ(this->guest.peer_count(), 1u);
   EXPECT_EQ(this->guest.peer_pid(0), THOOM_PID_HOST);
   EXPECT_TRUE(this->guest.peer_ready(THOOM_PID_HOST));
@@ -640,8 +640,8 @@ TEST_F(SwitchTest, GuestRejectsInvalidWelcomePid) {
 
     guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(pid)));
 
-    EXPECT_EQ(guest.state(), TestedSwitch::kClosed);
-    EXPECT_EQ(guest.reason(), TestedSwitch::kReasonProtocol);
+    EXPECT_EQ(guest.get_state(), TestedSwitch::kClosed);
+    EXPECT_EQ(guest.get_reason(), TestedSwitch::kReasonProtocol);
     expect_no_events(&guest);
 
     guest.poll();
@@ -660,8 +660,8 @@ TEST_F(SwitchTest, GuestKeepsRejectReasons) {
 
     guest.feed(kHostHandle, frame_bytes(kRejectKind, {code}));
 
-    EXPECT_EQ(guest.state(), TestedSwitch::kClosed);
-    EXPECT_EQ(guest.reason(), static_cast<TestedSwitch::Reason>(code));
+    EXPECT_EQ(guest.get_state(), TestedSwitch::kClosed);
+    EXPECT_EQ(guest.get_reason(), static_cast<TestedSwitch::Reason>(code));
     expect_no_events(&guest);
     EXPECT_TRUE(guest.closed.empty());
 
@@ -681,8 +681,8 @@ TEST_F(SwitchTest, GuestMapsUnknownRejectReasonsToProtocol) {
 
     guest.feed(kHostHandle, frame_bytes(kRejectKind, {code}));
 
-    EXPECT_EQ(guest.state(), TestedSwitch::kClosed);
-    EXPECT_EQ(guest.reason(), TestedSwitch::kReasonProtocol);
+    EXPECT_EQ(guest.get_state(), TestedSwitch::kClosed);
+    EXPECT_EQ(guest.get_reason(), TestedSwitch::kReasonProtocol);
   }
 }
 
@@ -694,8 +694,8 @@ TEST_F(SwitchTest, GuestParsesForeignVersionReject) {
       kHostHandle,
       frame_bytes(kRejectKind, {TestedSwitch::kReasonVersion}, kVersion + 1));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonVersion);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonVersion);
 }
 
 TEST_F(SwitchTest, GuestRejectsMalformedFrames) {
@@ -729,8 +729,8 @@ TEST_F(SwitchTest, GuestRejectsMalformedFrames) {
 
     guest.feed(kHostHandle, test_case.bytes);
 
-    EXPECT_EQ(guest.state(), TestedSwitch::kClosed);
-    EXPECT_EQ(guest.reason(), TestedSwitch::kReasonProtocol);
+    EXPECT_EQ(guest.get_state(), TestedSwitch::kClosed);
+    EXPECT_EQ(guest.get_reason(), TestedSwitch::kReasonProtocol);
     expect_no_events(&guest);
 
     guest.poll();
@@ -746,8 +746,8 @@ TEST_F(SwitchTest, GuestVersionMismatch) {
   this->guest.feed(kHostHandle,
                    frame_bytes(kHelloKind, {thoom::kRoleGuest}, kVersion + 1));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonVersion);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonVersion);
 }
 
 TEST_F(SwitchTest, GuestHandshakeTimeout) {
@@ -756,8 +756,8 @@ TEST_F(SwitchTest, GuestHandshakeTimeout) {
 
   this->guest.poll();
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonTimeout);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonTimeout);
   EXPECT_EQ(this->guest.closed.size(), 1u);
   EXPECT_EQ(this->guest.closed[0], kHostHandle);
   EXPECT_EQ(this->guest.close_room_calls, 1);
@@ -770,8 +770,8 @@ TEST_F(SwitchTest, GuestHelloSendFailure) {
 
   this->guest.open(kHostHandle);
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonTransport);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonTransport);
 
   this->guest.poll();
   EXPECT_EQ(this->guest.close_room_calls, 1);
@@ -787,8 +787,8 @@ TEST_F(SwitchTest, GuestDuplicateWelcome) {
 
   this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(6)));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonProtocol);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
 }
 
 TEST_F(SwitchTest, GuestHostDropDuringHandshake) {
@@ -797,8 +797,8 @@ TEST_F(SwitchTest, GuestHostDropDuringHandshake) {
 
   this->guest.drop(kHostHandle, TestedSwitch::kReasonTransport);
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonTransport);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonTransport);
   expect_no_events(&this->guest);
 }
 
@@ -813,8 +813,8 @@ TEST_F(SwitchTest, GuestHostDropAfterJoin) {
 
   expect_event(&this->guest, TestedSwitch::Event::kLeave, THOOM_PID_HOST,
                TestedSwitch::kReasonTransport);
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonTransport);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonTransport);
   EXPECT_EQ(this->guest.peer_count(), 0u);
 }
 
@@ -829,8 +829,8 @@ TEST_F(SwitchTest, GuestHostByeAfterJoin) {
 
   expect_event(&this->guest, TestedSwitch::Event::kLeave, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonClosed);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonClosed);
   EXPECT_EQ(this->guest.closed.size(), 1u);
   EXPECT_EQ(this->guest.closed[0], kHostHandle);
 
@@ -1027,7 +1027,7 @@ TEST_F(SwitchTest, EmptyQueues) {
   EXPECT_FALSE(this->host.receive(&datagram));
   EXPECT_FALSE(this->host.next_event(&event));
   EXPECT_EQ(this->host.peer_pid(0), THOOM_PID_INVALID);
-  EXPECT_STREQ(this->host.token(), "");
+  EXPECT_STREQ(this->host.get_token(), "");
   expect_consistent(this->host);
 }
 
@@ -1043,7 +1043,7 @@ TEST_F(SwitchTest, HostDropReadyGuest) {
   expect_event(&this->host, TestedSwitch::Event::kLeave, 1,
                TestedSwitch::kReasonTransport);
   EXPECT_EQ(this->host.peer_count(), 0u);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
   EXPECT_TRUE(this->host.closed.empty());
 }
 
@@ -1061,7 +1061,7 @@ TEST_F(SwitchTest, HostByeReadyGuest) {
   EXPECT_EQ(this->host.closed.size(), 1u);
   EXPECT_EQ(this->host.closed[0], kGuestHandle);
   EXPECT_EQ(this->host.peer_count(), 0u);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 }
 
 TEST_F(SwitchTest, CloseTwoGuestsSendsTwoByes) {
@@ -1097,8 +1097,8 @@ TEST_F(SwitchTest, GuestCloseSendsBye) {
 
   EXPECT_EQ(this->guest.sent.size(), 1u);
   expect_frame(this->guest, 0, kHostHandle, kByeKind, {}, true);
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonClosed);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonClosed);
   EXPECT_EQ(this->guest.close_room_calls, 1);
 }
 
@@ -1122,7 +1122,7 @@ TEST_F(SwitchTest, GuestDuplicateOpenKeepsHost) {
   EXPECT_EQ(this->guest.sent.size(), 1u);
 
   this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kJoined);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
 }
 
 TEST_F(SwitchTest, GuestByeDuringHandshake) {
@@ -1131,8 +1131,8 @@ TEST_F(SwitchTest, GuestByeDuringHandshake) {
 
   this->guest.feed(kHostHandle, frame_bytes(kByeKind, {}));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonClosed);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonClosed);
   EXPECT_EQ(this->guest.closed.size(), 1u);
   EXPECT_EQ(this->guest.closed[0], kHostHandle);
   expect_no_events(&this->guest);
@@ -1148,8 +1148,8 @@ TEST_F(SwitchTest, GuestRejectAfterJoin) {
   this->guest.feed(kHostHandle,
                    frame_bytes(kRejectKind, {TestedSwitch::kReasonFull}));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonFull);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonFull);
 }
 
 TEST_F(SwitchTest, HostTableFullClosesExtraHandle) {
@@ -1314,7 +1314,7 @@ TEST_F(SwitchTest, HostBoundsSoftCapStampede) {
   this->host.poll();
   EXPECT_EQ(this->host.closed.size(), 99u);
   EXPECT_EQ(this->host.peer_count(), 0u);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 
   this->host.close();
   EXPECT_EQ(this->host.close_room_calls, 1);
@@ -1327,16 +1327,16 @@ TEST_F(SwitchTest, GuestCannotReviveClosedSession) {
 
   this->guest.feed(kHostHandle, frame_bytes(kDataKind, {1}));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonProtocol);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
 
   this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
   this->guest.feed(kHostHandle, frame_bytes(kDataKind, {2}));
   this->guest.feed(kHostHandle, frame_bytes(kByeKind, {}));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonProtocol);
-  EXPECT_EQ(this->guest.local_pid(), THOOM_PID_INVALID);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
+  EXPECT_EQ(this->guest.get_local_pid(), THOOM_PID_INVALID);
   expect_no_events(&this->guest);
   expect_no_data(&this->guest);
 
@@ -1351,8 +1351,8 @@ TEST_F(SwitchTest, GuestAcceptsHugePid) {
   this->guest.open(kHostHandle);
   this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(huge)));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kJoined);
-  EXPECT_EQ(this->guest.local_pid(), huge);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
+  EXPECT_EQ(this->guest.get_local_pid(), huge);
   EXPECT_TRUE(this->guest.peer_ready(THOOM_PID_HOST));
 
   thoom::Datagram datagram;
@@ -1375,7 +1375,7 @@ TEST_F(SwitchTest, HostReusesFreedTableSlot) {
 
   EXPECT_TRUE(this->host.closed.empty());
   EXPECT_EQ(this->host.peer_count(), 0u);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 
   this->host.close();
   EXPECT_EQ(this->host.close_room_calls, 1);
@@ -1399,7 +1399,7 @@ TEST_F(SwitchTest, HostChurnsPeersWithoutAccumulation) {
   EXPECT_EQ(this->host.peer_count(), 0u);
   EXPECT_TRUE(this->host.closed.empty());
   EXPECT_TRUE(this->host.opened.empty());
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
   EXPECT_EQ(this->host.close_room_calls, 0);
   expect_no_events(&this->host);
 }
@@ -1456,7 +1456,7 @@ TEST_F(SwitchTest, HostSurvivesTeardownCallbackReentry) {
   EXPECT_EQ(this->host.closed[0], kGuestHandle);
   EXPECT_EQ(this->host.peer_count(), 1u);
   EXPECT_TRUE(this->host.peer_ready(2));
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
   expect_no_events(&this->host);
 }
 
@@ -1515,7 +1515,7 @@ TEST_F(SwitchTest, CloseWithPeersInEveryState) {
   expect_frame(this->host, 0, 801, kByeKind, {}, true);
   EXPECT_EQ(this->host.close_room_calls, 1);
   EXPECT_TRUE(this->host.closed.empty());
-  EXPECT_EQ(this->host.state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kClosed);
 }
 
 TEST_F(SwitchTest, GuestCloseWhileJoiningSendsNoBye) {
@@ -1528,8 +1528,8 @@ TEST_F(SwitchTest, GuestCloseWhileJoiningSendsNoBye) {
   expect_frame(this->guest, 0, kHostHandle, kHelloKind, {thoom::kRoleGuest},
                true);
   EXPECT_EQ(this->guest.close_room_calls, 1);
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonClosed);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonClosed);
 }
 
 TEST_F(SwitchTest, GuestOpenAfterCloseClosesHandle) {
@@ -1541,7 +1541,7 @@ TEST_F(SwitchTest, GuestOpenAfterCloseClosesHandle) {
 
   EXPECT_EQ(this->guest.closed.size(), 1u);
   EXPECT_EQ(this->guest.closed[0], kUnknownHandle);
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
 }
 
 TEST_F(SwitchTest, GuestRejectsHelloAfterJoin) {
@@ -1553,8 +1553,8 @@ TEST_F(SwitchTest, GuestRejectsHelloAfterJoin) {
 
   this->guest.feed(kHostHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonProtocol);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
   expect_no_events(&this->guest);
 }
 
@@ -1584,8 +1584,8 @@ TEST_F(SwitchTest, GuestRejectsRejectWithTrailingByte) {
   this->guest.feed(kHostHandle,
                    frame_bytes(kRejectKind, {TestedSwitch::kReasonVersion, 0}));
 
-  EXPECT_EQ(this->guest.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->guest.reason(), TestedSwitch::kReasonProtocol);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
 }
 
 TEST_F(SwitchTest, HostSurvivesDataFloodFromReadyPeer) {
@@ -1621,15 +1621,15 @@ TEST_F(SwitchTest, HostDropHandshakingGuest) {
   expect_no_events(&this->host);
   EXPECT_EQ(this->host.peer_count(), 0u);
   EXPECT_TRUE(this->host.closed.empty());
-  EXPECT_EQ(this->host.state(), TestedSwitch::kListening);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
 }
 
 TEST_F(SwitchTest, HostRejectsEmptyRoomToken) {
   this->host.room_token = "";
 
   EXPECT_FALSE(this->host.host(make_options()));
-  EXPECT_EQ(this->host.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->host.reason(), TestedSwitch::kReasonTransport);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->host.get_reason(), TestedSwitch::kReasonTransport);
   EXPECT_EQ(this->host.close_room_calls, 0);
 }
 
@@ -1656,8 +1656,8 @@ TEST_F(SwitchTest, HostCloseWithNoPeers) {
   EXPECT_TRUE(this->host.sent.empty());
   EXPECT_TRUE(this->host.closed.empty());
   EXPECT_EQ(this->host.close_room_calls, 1);
-  EXPECT_EQ(this->host.state(), TestedSwitch::kClosed);
-  EXPECT_EQ(this->host.reason(), TestedSwitch::kReasonClosed);
+  EXPECT_EQ(this->host.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->host.get_reason(), TestedSwitch::kReasonClosed);
 }
 
 TEST_F(SwitchTest, HostReusesMiddleSlotWithoutShifting) {
