@@ -30,9 +30,7 @@ class WebRtcSwitch : public Switch {
   struct Room {
     enum State {
       kIdle = 0,
-      kSignalling,
-      kCollecting,
-      kEstablished,
+      kOpen,
       kFailed,
     };
 
@@ -64,6 +62,7 @@ class WebRtcSwitch : public Switch {
       std::string second;
     };
 
+    int peer = -1;
     int pc = -1;
     std::atomic<int> reliable_dc{-1};
     std::atomic<int> unreliable_dc{-1};
@@ -77,25 +76,37 @@ class WebRtcSwitch : public Switch {
     std::deque<Signal> outbox;
   };
 
+  struct Pending {
+    int peer;
+    std::vector<uint8_t> bytes;
+  };
+
   bool begin(const std::string& code);
   void poll_room();
   void ping();
-  bool apply_event(const WebRtcSignaller::Event& event);
+  void handle_event(const WebRtcSignaller::Event& event);
   bool signal_outbox();
-  void fail_room();
 
-  bool create_link();
-  bool create_channels();
-  void attach_channel(int dc);
-  void detach_channel(int dc);
-  void teardown_link();
-  void drop_link();
+  Link* create_link(int peer);
+  bool create_channels(Link* link);
+  Link* find_link(int peer);
+  Link* free_link();
+  bool ready(const Link* link) const;
 
-  void check_channels();
-  void poll_link();
-  void apply_open(bool reliable);
-  void flush_pending();
-  bool write(const uint8_t* data, uint32_t size, bool reliable);
+  void poll_links();
+  void poll_link(Link* link);
+  void check_channels(Link* link);
+  void apply_open(Link* link, bool reliable);
+  void teardown_link(Link* link);
+  void close_link(Link* link);
+  void drop_link(Link* link);
+
+  void flush_pending(Link* link);
+  void drop_pending(int peer);
+  bool write(Link* link, const uint8_t* data, uint32_t size, bool reliable);
+
+  static void attach_channel(int dc, Link* link);
+  static void detach_channel(int dc);
 
   static void on_local_description(int, const char* sdp, const char* type,
                                    void* user_ptr);
@@ -107,14 +118,14 @@ class WebRtcSwitch : public Switch {
   static void on_channel_error(int dc, const char* error, void* user_ptr);
   static void on_channel_message(int dc, const char* message, int size,
                                  void* user_ptr);
-  static void push_event(Link::EventKind kind, int dc, void* user_ptr);
+  static void push_event(Link* link, Link::EventKind kind, int dc);
 
   Room room;
-  Link link;
+  Link links[kSwitchMaxPeers];
 
   bool offerer = false;
   bool announced = false;
-  std::deque<std::vector<uint8_t>> pending_reliable;
+  std::deque<Pending> pending_reliable;
 };
 
 };  // namespace thoom

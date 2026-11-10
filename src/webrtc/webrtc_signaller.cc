@@ -17,6 +17,8 @@
 #define CANDIDATE_TAG "candidate"
 #define DESCRIPTION_TAG "description"
 #define FAIL_TAG "fail"
+#define GONE_TAG "gone"
+#define PEER_FORMAT "peer %d"
 #define PING_TAG "ping"
 
 #define TEXT_MESSAGE -1
@@ -63,6 +65,7 @@ bool WebRtcSignaller::connect(const std::string& code) {
     std::lock_guard<std::mutex> guard(this->mutex);
     this->raw.clear();
     this->events.clear();
+    this->pending_peer = 0;
     this->opened = false;
     this->closed = false;
   }
@@ -148,18 +151,20 @@ WebRtcSignaller::State WebRtcSignaller::get_state() const {
   return this->state;
 }
 
-bool WebRtcSignaller::send_ping() { return this->send_message(PING_TAG); }
-
-bool WebRtcSignaller::send_description(const std::string& sdp,
-                                       const std::string& type) {
-  return this->send_message(DESCRIPTION_TAG) && this->send_message(sdp) &&
-         this->send_message(type);
+bool WebRtcSignaller::send_ping(int peer) {
+  return this->send_envelope(peer) && this->send_message(PING_TAG);
 }
 
-bool WebRtcSignaller::send_candidate(const std::string& cand,
+bool WebRtcSignaller::send_description(int peer, const std::string& sdp,
+                                       const std::string& type) {
+  return this->send_envelope(peer) && this->send_message(DESCRIPTION_TAG) &&
+         this->send_message(sdp) && this->send_message(type);
+}
+
+bool WebRtcSignaller::send_candidate(int peer, const std::string& cand,
                                      const std::string& mid) {
-  return this->send_message(CANDIDATE_TAG) && this->send_message(cand) &&
-         this->send_message(mid);
+  return this->send_envelope(peer) && this->send_message(CANDIDATE_TAG) &&
+         this->send_message(cand) && this->send_message(mid);
 }
 
 bool WebRtcSignaller::receive(Event* event) {
@@ -205,6 +210,12 @@ void WebRtcSignaller::on_message(int, const char* message, int size,
   signaller->push_message(std::string(message, size));
 }
 
+bool WebRtcSignaller::send_envelope(int peer) {
+  char envelope[32] = {};
+  snprintf(envelope, sizeof(envelope), PEER_FORMAT, peer);
+  return this->send_message(envelope);
+}
+
 bool WebRtcSignaller::send_message(const std::string& message) {
   if (this->state != WebRtcSignaller::kConnected || this->ws < 0) {
     LOG(WARNING) << "WebRtcSignaller::send_message: not connected";
@@ -223,7 +234,15 @@ void WebRtcSignaller::assemble_events() {
   while (!this->raw.empty()) {
     const std::string tag = this->raw.front();
 
+    int peer = 0;
+    if (sscanf(tag.c_str(), PEER_FORMAT, &peer) == 1) {
+      this->pending_peer = peer;
+      this->raw.pop_front();
+      continue;
+    }
+
     Event event = {};
+    event.peer = this->pending_peer;
     size_t payload_fields = 0;
 
     if (tag == DESCRIPTION_TAG) {
@@ -236,6 +255,8 @@ void WebRtcSignaller::assemble_events() {
       event.kind = Event::kPing;
     } else if (tag == FAIL_TAG) {
       event.kind = Event::kFail;
+    } else if (tag == GONE_TAG) {
+      event.kind = Event::kGone;
     } else {
       this->raw.pop_front();
       continue;

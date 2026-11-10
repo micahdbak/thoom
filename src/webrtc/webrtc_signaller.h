@@ -20,9 +20,11 @@ class WebRtcSignaller {
       kDescription,
       kCandidate,
       kFail,
+      kGone,
     };
 
     Kind kind;
+    int peer;
     std::string first;
     std::string second;
   };
@@ -38,9 +40,11 @@ class WebRtcSignaller {
   void poll();
   State get_state() const;
 
-  bool send_ping();
-  bool send_description(const std::string& sdp, const std::string& type);
-  bool send_candidate(const std::string& cand, const std::string& mid);
+  bool send_ping(int peer);
+  bool send_description(int peer, const std::string& sdp,
+                        const std::string& type);
+  bool send_candidate(int peer, const std::string& cand,
+                      const std::string& mid);
   bool receive(Event* event);
 
  private:
@@ -49,6 +53,7 @@ class WebRtcSignaller {
   static void on_error(int, const char* error, void* user_ptr);
   static void on_message(int, const char* message, int size, void* user_ptr);
 
+  bool send_envelope(int peer);
   bool send_message(const std::string& message);
   void push_message(const std::string& message);
   void assemble_events();
@@ -59,6 +64,7 @@ class WebRtcSignaller {
   std::mutex mutex;
   std::deque<std::string> raw;
   std::deque<Event> events;
+  int pending_peer = 0;
   bool opened = false;
   bool closed = false;
 };
