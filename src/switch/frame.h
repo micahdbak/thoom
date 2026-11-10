@@ -7,6 +7,9 @@ namespace thoom {
 
 constexpr uint8_t kProtocolVersion = 1;
 
+constexpr uint8_t kRoleHost = 0;
+constexpr uint8_t kRoleGuest = 1;
+
 constexpr uint32_t kFrameHeaderSize = 3;
 constexpr uint32_t kMaxPayload = 65536;
 

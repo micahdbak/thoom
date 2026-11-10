@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "switch/bytes.h"
-#include "switch/protocol.h"
+#include "switch/frame.h"
 #include "thoom/thoom.h"
 
 namespace thoom {
@@ -25,11 +25,11 @@ bool Switch::host(const Options& options) {
   }
 
   this->options = options;
-  this->role = kHostRole;
+  this->role = kRoleHost;
   this->local_pid_value = THOOM_PID_HOST;
 
   std::string token;
-  if (!this->open_room(&token)) {
+  if (!this->open_room(&token) || token.empty()) {
     this->state_value = kClosed;
     this->reason_value = kReasonTransport;
     return false;
@@ -47,9 +47,8 @@ bool Switch::join(const Options& options, const char* token) {
   }
 
   this->options = options;
-  this->role = kGuestRole;
+  this->role = kRoleGuest;
   this->token_value = token;
-  this->state_value = kJoining;
 
   if (!this->enter_room(this->token_value)) {
     this->state_value = kClosed;
@@ -58,6 +57,7 @@ bool Switch::join(const Options& options, const char* token) {
   }
 
   this->room_open = true;
+  this->state_value = kJoining;
   return true;
 }
 
@@ -77,7 +77,7 @@ void Switch::poll() {
 
 void Switch::close() {
   if (this->state_value != kClosed) {
-    for (uint32_t i = 0; i < this->peer_total; i++) {
+    for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
       if (this->peers[i].state == kPeerReady) {
         this->send_frame(&this->peers[i], kFrameBye, nullptr, 0, true);
       }
@@ -97,7 +97,7 @@ bool Switch::send(const Datagram& datagram) {
     return false;
   }
 
-  Peer* peer = this->find_pid(datagram.peer);
+  const Peer* peer = this->find_pid(datagram.peer);
   if (peer == nullptr || peer->state != kPeerReady) {
     return false;
   }
@@ -140,7 +140,7 @@ uint32_t Switch::peer_count() const { return this->ready_count(); }
 thoom_pid Switch::peer_pid(uint32_t index) const {
   uint32_t seen = 0;
 
-  for (uint32_t i = 0; i < this->peer_total; i++) {
+  for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
     if (this->peers[i].state != kPeerReady) {
       continue;
     }
@@ -166,7 +166,11 @@ void Switch::on_open(PeerHandle handle) {
     return;
   }
 
-  if (this->role == kGuestRole && this->peer_total > 0) {
+  if (this->find_handle(handle) != nullptr) {
+    return;
+  }
+
+  if (this->role == kRoleGuest && this->used_count() > 0) {
     this->close_peer(handle);
     return;
   }
@@ -179,7 +183,7 @@ void Switch::on_open(PeerHandle handle) {
 
   peer->deadline_ms = now_ms() + this->options.handshake_timeout_ms;
 
-  if (this->role == kHostRole) {
+  if (this->role == kRoleHost) {
     if (!this->can_accept()) {
       this->refuse(peer, kReasonFull);
     }
@@ -187,7 +191,7 @@ void Switch::on_open(PeerHandle handle) {
   }
 
   ByteWriter writer;
-  writer.write_u8(static_cast<uint8_t>(kGuestRole));
+  writer.write_u8(kRoleGuest);
   if (!this->send_frame(peer, kFrameHello, writer.bytes().data(),
                         static_cast<uint32_t>(writer.bytes().size()), true)) {
     this->finish(kReasonTransport);
@@ -225,53 +229,53 @@ void Switch::on_datagram(PeerHandle handle, const void* data, uint32_t size,
 }
 
 void Switch::on_drop(PeerHandle handle, Reason reason) {
-  const uint32_t index = this->peer_index(handle);
-  if (index >= kSwitchMaxPeers) {
+  Peer* peer = this->find_handle(handle);
+  if (peer == nullptr) {
     return;
   }
 
-  const bool ready = this->peers[index].state == kPeerReady;
-  const thoom_pid pid = this->peers[index].pid;
+  const bool ready = peer->state == kPeerReady;
+  const thoom_pid pid = peer->pid;
 
-  this->remove_peer(index);
+  this->remove_peer(peer);
 
   if (ready) {
     this->push_event(Event::kLeave, pid, reason);
   }
 
-  if (this->role == kGuestRole) {
+  if (this->role == kRoleGuest) {
     this->finish(reason);
   }
 }
 
 bool Switch::can_accept() const {
-  return this->peer_total + 1 <= this->options.soft_cap;
+  const uint32_t players = this->used_count() + 1;
+  return players <= this->options.soft_cap;
 }
 
 void Switch::expire_peers() {
   const int64_t now = now_ms();
 
-  for (uint32_t i = 0; i < this->peer_total;) {
+  for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
     Peer* peer = &this->peers[i];
-
-    if (peer->state == kPeerRefused && now >= peer->deadline_ms) {
-      const PeerHandle handle = peer->handle;
-      this->remove_peer(i);
-      this->close_peer(handle);
+    if (peer->state == kPeerFree) {
       continue;
     }
 
-    if (peer->state == kPeerHandshaking && now >= peer->deadline_ms) {
-      const PeerHandle handle = peer->handle;
-      if (this->role == kGuestRole) {
-        this->finish(kReasonTimeout);
-      }
-      this->remove_peer(i);
-      this->close_peer(handle);
+    const bool expired =
+        (peer->state == kPeerRefused || peer->state == kPeerHandshaking) &&
+        now >= peer->deadline_ms;
+    if (!expired) {
       continue;
     }
 
-    i++;
+    if (peer->state == kPeerHandshaking && this->role == kRoleGuest) {
+      this->finish(kReasonTimeout);
+    }
+
+    const PeerHandle handle = peer->handle;
+    this->remove_peer(peer);
+    this->close_peer(handle);
   }
 }
 
@@ -281,7 +285,9 @@ void Switch::shutdown() {
   }
 
   this->room_open = false;
-  this->peer_total = 0;
+  for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
+    this->peers[i] = Peer();
+  }
   this->close_room();
 }
 
@@ -314,7 +320,7 @@ void Switch::abandon(Peer* peer) {
 }
 
 void Switch::violation(Peer* peer, Reason reason) {
-  if (this->role == kHostRole) {
+  if (this->role == kRoleHost) {
     this->refuse(peer, reason);
   } else {
     this->finish(reason);
@@ -345,7 +351,7 @@ void Switch::handle_frame(Peer* peer, const Frame& frame, bool reliable) {
 }
 
 void Switch::handle_hello(Peer* peer, const Frame& frame) {
-  if (this->role != kHostRole || peer->state != kPeerHandshaking) {
+  if (this->role != kRoleHost || peer->state != kPeerHandshaking) {
     this->violation(peer, kReasonProtocol);
     return;
   }
@@ -357,7 +363,7 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
     return;
   }
 
-  if (hello_role != static_cast<uint8_t>(kGuestRole)) {
+  if (hello_role != kRoleGuest) {
     this->refuse(peer, kReasonRole);
     return;
   }
@@ -383,7 +389,7 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
 }
 
 void Switch::handle_welcome(Peer* peer, const Frame& frame) {
-  if (this->role != kGuestRole || peer->state != kPeerHandshaking) {
+  if (this->role != kRoleGuest || peer->state != kPeerHandshaking) {
     this->violation(peer, kReasonProtocol);
     return;
   }
@@ -408,7 +414,7 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
 }
 
 void Switch::handle_reject(Peer* peer, const Frame& frame) {
-  if (this->role == kHostRole) {
+  if (this->role == kRoleHost) {
     this->refuse(peer, kReasonProtocol);
     return;
   }
@@ -433,14 +439,14 @@ void Switch::handle_bye(Peer* peer) {
   const thoom_pid pid = peer->pid;
   const PeerHandle handle = peer->handle;
 
-  this->remove_peer(this->peer_index(handle));
+  this->remove_peer(peer);
   this->close_peer(handle);
 
   if (ready) {
     this->push_event(Event::kLeave, pid, kReasonNone);
   }
 
-  if (this->role == kGuestRole) {
+  if (this->role == kRoleGuest) {
     this->finish(kReasonClosed);
   }
 }
@@ -472,18 +478,10 @@ bool Switch::send_frame(const Peer* peer, uint8_t kind, const void* payload,
 }
 
 Switch::Peer* Switch::find_handle(PeerHandle handle) {
-  const uint32_t index = this->peer_index(handle);
-  if (index >= kSwitchMaxPeers) {
-    return nullptr;
-  }
-
-  return &this->peers[index];
-}
-
-Switch::Peer* Switch::find_pid(thoom_pid pid) {
-  for (uint32_t i = 0; i < this->peer_total; i++) {
-    if (this->peers[i].pid == pid) {
-      return &this->peers[i];
+  for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
+    Peer* peer = &this->peers[i];
+    if (peer->state != kPeerFree && peer->handle == handle) {
+      return peer;
     }
   }
 
@@ -491,54 +489,57 @@ Switch::Peer* Switch::find_pid(thoom_pid pid) {
 }
 
 const Switch::Peer* Switch::find_pid(thoom_pid pid) const {
-  for (uint32_t i = 0; i < this->peer_total; i++) {
-    if (this->peers[i].pid == pid) {
-      return &this->peers[i];
+  for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
+    const Peer* peer = &this->peers[i];
+    if (peer->state != kPeerFree && peer->pid == pid) {
+      return peer;
     }
   }
 
   return nullptr;
 }
 
-uint32_t Switch::peer_index(PeerHandle handle) const {
-  for (uint32_t i = 0; i < this->peer_total; i++) {
-    if (this->peers[i].handle == handle) {
-      return i;
-    }
-  }
-
-  return kSwitchMaxPeers;
-}
-
 Switch::Peer* Switch::add_peer(PeerHandle handle) {
-  if (this->peer_total >= kSwitchMaxPeers) {
-    return nullptr;
+  for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
+    Peer* peer = &this->peers[i];
+    if (peer->state != kPeerFree) {
+      continue;
+    }
+
+    peer->handle = handle;
+    peer->pid = THOOM_PID_INVALID;
+    peer->state = kPeerHandshaking;
+    peer->deadline_ms = 0;
+    return peer;
   }
 
-  Peer* peer = &this->peers[this->peer_total++];
-  peer->handle = handle;
-  peer->pid = THOOM_PID_INVALID;
-  peer->state = kPeerHandshaking;
-  peer->deadline_ms = 0;
-  return peer;
+  return nullptr;
 }
 
-void Switch::remove_peer(uint32_t index) {
-  if (index >= this->peer_total) {
+void Switch::remove_peer(Peer* peer) {
+  if (peer == nullptr) {
     return;
   }
 
-  for (uint32_t i = index; i + 1 < this->peer_total; i++) {
-    this->peers[i] = this->peers[i + 1];
+  *peer = Peer();
+}
+
+uint32_t Switch::used_count() const {
+  uint32_t count = 0;
+
+  for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
+    if (this->peers[i].state != kPeerFree) {
+      count++;
+    }
   }
 
-  this->peer_total--;
+  return count;
 }
 
 uint32_t Switch::ready_count() const {
   uint32_t count = 0;
 
-  for (uint32_t i = 0; i < this->peer_total; i++) {
+  for (uint32_t i = 0; i < kSwitchMaxPeers; i++) {
     if (this->peers[i].state == kPeerReady) {
       count++;
     }

@@ -1,4 +1,4 @@
 add_library(thoom_switch OBJECT
   bytes.cc
-  protocol.cc
+  frame.cc
   switch.cc)

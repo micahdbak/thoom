@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "switch/protocol.h"
+#include "switch/frame.h"
 #include "thoom/thoom.h"
 
 namespace thoom {
@@ -94,22 +94,18 @@ class Switch {
   void on_drop(PeerHandle handle, Reason reason);
 
  private:
-  enum Role {
-    kHostRole = 0,
-    kGuestRole,
-  };
-
   enum PeerState {
-    kPeerHandshaking = 0,
+    kPeerFree = 0,
+    kPeerHandshaking,
     kPeerReady,
     kPeerRefused,
   };
 
   struct Peer {
-    PeerHandle handle;
-    thoom_pid pid;
-    PeerState state;
-    int64_t deadline_ms;
+    PeerHandle handle = 0;
+    thoom_pid pid = THOOM_PID_INVALID;
+    PeerState state = kPeerFree;
+    int64_t deadline_ms = 0;
   };
 
   bool can_accept() const;
@@ -131,25 +127,23 @@ class Switch {
                   uint32_t size, bool reliable);
 
   Peer* find_handle(PeerHandle handle);
-  Peer* find_pid(thoom_pid pid);
   const Peer* find_pid(thoom_pid pid) const;
-  uint32_t peer_index(PeerHandle handle) const;
   Peer* add_peer(PeerHandle handle);
-  void remove_peer(uint32_t index);
+  void remove_peer(Peer* peer);
+  uint32_t used_count() const;
   uint32_t ready_count() const;
   void push_event(Event::Kind kind, thoom_pid peer, Reason reason);
 
   Options options;
   State state_value = kIdle;
   Reason reason_value = kReasonNone;
-  Role role = kHostRole;
+  uint8_t role = kRoleHost;
   bool room_open = false;
   std::string token_value;
   thoom_pid local_pid_value = THOOM_PID_INVALID;
   uint64_t next_pid = 1;
 
   Peer peers[kSwitchMaxPeers];
-  uint32_t peer_total = 0;
 
   std::deque<Event> events;
   std::deque<Datagram> inbound;

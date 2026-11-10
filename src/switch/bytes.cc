@@ -41,8 +41,29 @@ void ByteWriter::write_string(const std::string& value) {
 }
 
 void ByteWriter::write_blob(const void* data, uint32_t size) {
-  if (data == nullptr) {
+  const uint8_t* bytes = static_cast<const uint8_t*>(data);
+  if (bytes == nullptr) {
     size = 0;
+  }
+
+  // A source inside our own buffer must be copied before the length write can
+  // reallocate it.
+  const uintptr_t start = reinterpret_cast<uintptr_t>(bytes);
+  const uintptr_t first = reinterpret_cast<uintptr_t>(this->buffer.data());
+  const uintptr_t last = first + this->buffer.size();
+  const bool aliases =
+      size > 0 && !this->buffer.empty() && start >= first && start < last;
+
+  if (aliases) {
+    const uint32_t available = static_cast<uint32_t>(last - start);
+    if (size > available) {
+      size = available;
+    }
+
+    const std::vector<uint8_t> copy(bytes, bytes + size);
+    this->write_u32(size);
+    this->buffer.insert(this->buffer.end(), copy.begin(), copy.end());
+    return;
   }
 
   this->write_u32(size);
@@ -50,7 +71,6 @@ void ByteWriter::write_blob(const void* data, uint32_t size) {
     return;
   }
 
-  const uint8_t* bytes = static_cast<const uint8_t*>(data);
   this->buffer.insert(this->buffer.end(), bytes, bytes + size);
 }
 
@@ -76,17 +96,6 @@ uint32_t ByteReader::remaining() const {
   }
 
   return this->size - this->offset;
-}
-
-const uint8_t* ByteReader::take(uint32_t size) {
-  if (this->failed || size > this->size - this->offset) {
-    this->failed = true;
-    return nullptr;
-  }
-
-  const uint8_t* result = this->data + this->offset;
-  this->offset += size;
-  return result;
 }
 
 uint8_t ByteReader::read_u8() {
@@ -161,6 +170,17 @@ const uint8_t* ByteReader::read_blob(uint32_t* size) {
   }
 
   return bytes;
+}
+
+const uint8_t* ByteReader::take(uint32_t size) {
+  if (this->failed || size > this->size - this->offset) {
+    this->failed = true;
+    return nullptr;
+  }
+
+  const uint8_t* result = this->data + this->offset;
+  this->offset += size;
+  return result;
 }
 
 };  // namespace thoom
