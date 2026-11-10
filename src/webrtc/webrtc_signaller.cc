@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
+#include <random>
 #include <string>
 
 #include "absl/log/log.h"
@@ -22,6 +23,9 @@
 #define PING_TAG "ping"
 
 #define TEXT_MESSAGE -1
+
+#define CODE_LENGTH 6
+static const char CODE_CHARSET[] = "023456789ABCEFHLPRUXY";
 
 namespace thoom {
 
@@ -100,6 +104,21 @@ void WebRtcSignaller::poll() {
     this->assemble_events();
   }
 
+  // rtcCreateWebSocket starts connecting before a callback can be installed, so
+  // a fast handshake can finish before on_open is registered. Query the socket
+  // so a missed event cannot leave the signaller connecting forever.
+  if (this->ws >= 0 && this->state_value == WebRtcSignaller::kConnecting) {
+    if (rtcIsOpen(this->ws)) {
+      std::lock_guard<std::mutex> guard(this->mutex);
+      this->connected_once = true;
+      this->state_value = WebRtcSignaller::kConnected;
+    } else if (rtcIsClosed(this->ws)) {
+      std::lock_guard<std::mutex> guard(this->mutex);
+      was_closed = true;
+      this->failed_attempt = !this->connected_once;
+    }
+  }
+
   // Release the socket outside the lock: a leaked one would be destroyed under
   // the library's own lock at rtcCleanup and could never report back.
   if (was_closed) {
@@ -148,6 +167,33 @@ WebRtcSignaller::State WebRtcSignaller::state() const {
 }
 
 bool WebRtcSignaller::failed() const { return this->failed_attempt; }
+
+std::string WebRtcSignaller::make_code() {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(0, sizeof(CODE_CHARSET) - 2);
+
+  std::string code;
+  for (int i = 0; i < CODE_LENGTH; i++) {
+    code.push_back(CODE_CHARSET[dis(gen)]);
+  }
+
+  return code;
+}
+
+bool WebRtcSignaller::valid_code(const std::string& code) {
+  if (code.size() != CODE_LENGTH) {
+    return false;
+  }
+
+  for (const char c : code) {
+    if ((c < 'A' || c > 'Z') && (c < '0' || c > '9')) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 void WebRtcSignaller::on_open(int, void* user_ptr) {
   WebRtcSignaller* signaller = static_cast<WebRtcSignaller*>(user_ptr);

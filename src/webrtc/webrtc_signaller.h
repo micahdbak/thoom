@@ -54,6 +54,10 @@ class WebRtcSignaller {
 
   bool failed() const;
 
+  static std::string make_code();
+
+  static bool valid_code(const std::string& code);
+
  private:
   static void on_open(int, void* user_ptr);
 

@@ -1,44 +1,21 @@
 #pragma once
 
-#include <atomic>
-#include <condition_variable>
-#include <cstddef>
 #include <cstdint>
-#include <deque>
-#include <mutex>
-#include <queue>
 #include <string>
-#include <utility>
 
 #include "connection.h"
+#include "webrtc/webrtc_channels.h"
+#include "webrtc/webrtc_signaller.h"
 
 namespace thoom {
 
 class WebRtcConnection : public Connection {
-  enum EventKind {
-    kEventOpen = 0,
-    kEventClosed,
-    kEventFailed,
-  };
-
-  struct Event {
-    EventKind kind;
-    int dc;
-  };
-
  public:
-  WebRtcConnection() = default;
-  ~WebRtcConnection() override = default;
+  WebRtcConnection();
+  ~WebRtcConnection() override;
 
-  void start_collecting(bool offerer);
-
-  void set_remote_description(const std::string& sdp, const std::string& type);
-
-  std::pair<std::string, std::string> local_description();
-
-  void add_candidate(const std::string& cand, const std::string& mid);
-
-  std::pair<std::string, std::string> candidate();
+  bool start_host();
+  bool start_guest(const std::string& code);
 
   void poll() override;
 
@@ -50,44 +27,23 @@ class WebRtcConnection : public Connection {
 
   void close() override;
 
-  void wait(uint32_t timeout_ms);
+  std::string code;
 
  private:
-  static void on_description(int, const char* sdp, const char* type,
-                             void* user_ptr);
+  bool start(bool offerer);
+  void poll_connecting();
+  bool apply_event(const WebRtcSignaller::Event& event);
+  void send_local();
+  void fail();
 
-  static void on_candidate(int, const char* cand, const char* mid,
-                           void* user_ptr);
+  bool offerer = false;
+  bool started = false;
+  bool collecting = false;
+  int64_t next_ping_ms = 0;
+  State state_value = kDead;
 
-  static void on_datachannel(int, int dc, void* user_ptr);
-
-  static void on_open(int dc, void* user_ptr);
-
-  static void on_close(int dc, void* user_ptr);
-
-  static void on_error(int dc, const char* error, void* user_ptr);
-
-  static void on_message(int dc, const char* message, int size, void* user_ptr);
-
-  void setup_channel(int dc);
-
-  void detach_channel(int dc);
-
-  void push_event(EventKind kind, int dc);
-
-  State current_state = kDead;
-  int pc = -1;
-  size_t max_payload = 0;
-
-  std::mutex mutex;
-  std::condition_variable cv;
-  std::queue<Event> events;
-  std::deque<Message> incoming;
-  std::pair<std::string, std::string> description;
-  std::queue<std::pair<std::string, std::string>> candidates;
-
-  std::atomic<int> reliable_dc{-1};
-  std::atomic<int> unreliable_dc{-1};
+  WebRtcChannels* channels = nullptr;
+  WebRtcSignaller* signaller = nullptr;
 };
 
 };  // namespace thoom

@@ -7,7 +7,7 @@
 #include <thread>
 
 #include "peer/peer.h"
-#include "webrtc/webrtc_connection.h"
+#include "webrtc/webrtc_channels.h"
 #include "webrtc/webrtc_signaller.h"
 
 namespace thoom {
@@ -53,7 +53,7 @@ class PeerThread {
   bool got_ping = false;
   std::thread* message_thread = nullptr;
 
-  WebRtcConnection* connection = nullptr;
+  WebRtcChannels* connection = nullptr;
   WebRtcSignaller* signaller = nullptr;
 };
 

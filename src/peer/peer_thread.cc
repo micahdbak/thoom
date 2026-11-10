@@ -3,7 +3,6 @@
 #include <chrono>
 #include <cstdint>
 #include <mutex>
-#include <random>
 #include <string>
 #include <thread>
 #include <utility>
@@ -11,7 +10,7 @@
 #include "connection.h"
 #include "peer/peer.h"
 #include "webrtc/webrtc.h"
-#include "webrtc/webrtc_connection.h"
+#include "webrtc/webrtc_channels.h"
 #include "webrtc/webrtc_signaller.h"
 
 #define PEER_WAIT_MS 10
@@ -20,26 +19,12 @@
 
 namespace thoom {
 
-static std::string make_code() {
-  static char charset[] = "023456789ABCEFHLPRUXY";
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dis(0, sizeof(charset) - 2);
-
-  std::string code;
-  for (int i = 0; i < 6; i++) {
-    code.push_back(charset[dis(gen)]);
-  }
-
-  return code;
-}
-
 PeerThread::PeerThread(Peer* peer, bool offerer) {
   this->peer = peer;
   this->offerer.store(offerer);
   webrtc_init();
 
-  this->connection = new WebRtcConnection();
+  this->connection = new WebRtcChannels();
   this->signaller = new WebRtcSignaller();
 
   this->message_thread = new std::thread(&PeerThread::message_loop, this);
@@ -120,7 +105,7 @@ void PeerThread::no_connection() {
     if (this->offerer.load()) {
       code = this->peer->get_connection_code();
     } else {
-      code = make_code();
+      code = WebRtcSignaller::make_code();
       this->peer->set_connection_code(code);
     }
 

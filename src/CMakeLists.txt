@@ -2,6 +2,7 @@
 add_subdirectory(webrtc)
 
 add_subdirectory(audio)
+add_subdirectory(comms)
 add_subdirectory(hud)
 add_subdirectory(input)
 add_subdirectory(map)

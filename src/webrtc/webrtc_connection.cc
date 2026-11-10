@@ -1,303 +1,228 @@
 #include "webrtc/webrtc_connection.h"
 
-#include <rtc/rtc.h>
-
 #include <chrono>
 #include <cstdint>
-#include <cstring>
-#include <mutex>
 #include <string>
 #include <utility>
 
 #include "absl/log/log.h"
 #include "connection.h"
+#include "webrtc/webrtc.h"
+#include "webrtc/webrtc_channels.h"
+#include "webrtc/webrtc_signaller.h"
 
-#define RELIABLE_LABEL "reliable"
-#define UNRELIABLE_LABEL "unreliable"
+// The concrete transport: one rendezvous, then a pair of data channels. The
+// signaller exists only while the connection is connecting and is dropped once
+// both channels are open. A failure is final; the owner destroys the transport
+// and creates a fresh one if it wants to try again.
 
-#define ICE_SERVER_COUNT 2
-
-static const char* ICE_SERVER_URLS[ICE_SERVER_COUNT] = {
-    "stun:droppr.net:5051", "turn:droppr:droppr@droppr.net:5051"};
+#define CONNECT_PING_MS 500
 
 namespace thoom {
 
-void WebRtcConnection::start_collecting(bool offerer) {
-  if (this->current_state != Connection::kDead) {
-    LOG(FATAL) << "WebRtcConnection::start_collecting error: already "
-                  "collecting or alive";
-  }
-
-  rtcConfiguration config = {};
-  config.iceServers = ICE_SERVER_URLS;
-  config.iceServersCount = ICE_SERVER_COUNT;
-  config.certificateType = RTC_CERTIFICATE_DEFAULT;
-  config.iceTransportPolicy = RTC_TRANSPORT_POLICY_ALL;
-  config.enableIceTcp = true;
-  config.disableAutoNegotiation = false;
-
-  this->pc = rtcCreatePeerConnection(&config);
-  if (this->pc < 0) {
-    LOG(FATAL) << "WebRtcConnection::start_collecting error: "
-                  "rtcCreatePeerConnection returned error code: "
-               << this->pc;
-  }
-
-  rtcSetUserPointer(this->pc, this);
-  rtcSetLocalCandidateCallback(this->pc, WebRtcConnection::on_candidate);
-  rtcSetLocalDescriptionCallback(this->pc, WebRtcConnection::on_description);
-  rtcSetDataChannelCallback(this->pc, WebRtcConnection::on_datachannel);
-  rtcSetClosedCallback(this->pc, WebRtcConnection::on_close);
-  rtcSetErrorCallback(this->pc, WebRtcConnection::on_error);
-
-  if (offerer) {
-    rtcDataChannelInit reliable = {};
-    this->reliable_dc =
-        rtcCreateDataChannelEx(this->pc, RELIABLE_LABEL, &reliable);
-
-    rtcDataChannelInit unreliable = {};
-    unreliable.reliability.unreliable = true;
-    unreliable.reliability.unordered = true;
-    unreliable.reliability.maxRetransmits = 0;
-    this->unreliable_dc =
-        rtcCreateDataChannelEx(this->pc, UNRELIABLE_LABEL, &unreliable);
-
-    if (this->reliable_dc < 0 || this->unreliable_dc < 0) {
-      LOG(FATAL) << "WebRtcConnection::start_collecting error: "
-                    "rtcCreateDataChannelEx returned error code: "
-                 << this->reliable_dc.load() << ", "
-                 << this->unreliable_dc.load();
-    }
-
-    this->setup_channel(this->reliable_dc);
-    this->setup_channel(this->unreliable_dc);
-  }
-
-  this->current_state = Connection::kConnecting;
+static int64_t now_ms() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
 }
 
-void WebRtcConnection::set_remote_description(const std::string& sdp,
-                                              const std::string& type) {
-  if (this->current_state != Connection::kConnecting || this->pc < 0) {
-    LOG(FATAL) << "WebRtcConnection::set_remote_description error: bad state";
-  }
+WebRtcConnection::WebRtcConnection() {
+  webrtc_init();
 
-  rtcSetRemoteDescription(this->pc, sdp.c_str(), type.c_str());
+  this->channels = new WebRtcChannels();
+  this->signaller = new WebRtcSignaller();
 }
 
-std::pair<std::string, std::string> WebRtcConnection::local_description() {
-  std::lock_guard<std::mutex> guard(this->mutex);
+WebRtcConnection::~WebRtcConnection() {
+  // The library must outlive every object that holds one of its ids, and only
+  // one thread may touch it. Both are true here: the owner has stopped polling,
+  // and the objects are destroyed before the library.
+  this->signaller->disconnect();
+  this->channels->close();
 
-  const std::pair<std::string, std::string> result = this->description;
-  this->description = std::pair<std::string, std::string>("", "");
-  return result;
+  delete this->channels;
+  this->channels = nullptr;
+
+  delete this->signaller;
+  this->signaller = nullptr;
+
+  webrtc_quit();
 }
 
-void WebRtcConnection::add_candidate(const std::string& cand,
-                                     const std::string& mid) {
-  if (this->current_state != Connection::kConnecting || this->pc < 0) {
-    LOG(FATAL) << "WebRtcConnection::add_candidate error: bad state";
-  }
-
-  rtcAddRemoteCandidate(this->pc, cand.c_str(), mid.c_str());
+bool WebRtcConnection::start_host() {
+  this->code = WebRtcSignaller::make_code();
+  return this->start(false);
 }
 
-std::pair<std::string, std::string> WebRtcConnection::candidate() {
-  std::lock_guard<std::mutex> guard(this->mutex);
-
-  if (this->candidates.empty()) {
-    return std::pair<std::string, std::string>("", "");
+bool WebRtcConnection::start_guest(const std::string& code) {
+  if (!WebRtcSignaller::valid_code(code)) {
+    LOG(ERROR) << "WebRtcConnection::start_guest: invalid connection code";
+    return false;
   }
 
-  const std::pair<std::string, std::string> result = this->candidates.front();
-  this->candidates.pop();
-  return result;
+  this->code = code;
+  return this->start(true);
 }
 
 void WebRtcConnection::poll() {
-  std::lock_guard<std::mutex> guard(this->mutex);
-
-  while (!this->events.empty()) {
-    const Event event = this->events.front();
-    this->events.pop();
-
-    switch (event.kind) {
-      case kEventOpen: {
-        if (event.dc != this->reliable_dc.load()) {
-          break;
-        }
-
-        const int max_payload = rtcMaxMessageSize(event.dc);
-        this->max_payload = max_payload > 0 ? max_payload : 0;
-        this->current_state = Connection::kReady;
-      } break;
-      case kEventClosed:
-      case kEventFailed:
-        this->current_state = Connection::kFailed;
-        break;
-    }
+  switch (this->state_value) {
+    case kDead:
+    case kFailed:
+      return;
+    case kConnecting:
+      this->poll_connecting();
+      return;
+    case kReady:
+      this->channels->poll();
+      if (this->channels->state() != kReady) {
+        this->fail();
+      }
+      return;
   }
 }
 
 bool WebRtcConnection::receive(Message* message) {
-  std::lock_guard<std::mutex> guard(this->mutex);
-
-  if (this->incoming.empty()) {
-    return false;
-  }
-
-  *message = std::move(this->incoming.front());
-  this->incoming.pop_front();
-  return true;
+  return this->channels->receive(message);
 }
 
 bool WebRtcConnection::send(const Message& message) {
-  if (this->current_state != Connection::kReady) {
-    LOG(WARNING) << "WebRtcConnection::send: not connected";
-    return false;
-  }
-
-  const int dc =
-      message.reliable ? this->reliable_dc.load() : this->unreliable_dc.load();
-  if (dc < 0) {
-    LOG(WARNING) << "WebRtcConnection::send: channel not open";
-    return false;
-  }
-
-  if (this->max_payload != 0 && message.bytes.size() > this->max_payload) {
-    LOG(WARNING) << "WebRtcConnection::send: message is "
-                 << message.bytes.size() << " bytes, limit is "
-                 << this->max_payload;
-    return false;
-  }
-
-  const char* data = reinterpret_cast<const char*>(message.bytes.data());
-  const int size = static_cast<int>(message.bytes.size());
-  return rtcSendMessage(dc, data, size) >= 0;
+  return this->channels->send(message);
 }
 
-Connection::State WebRtcConnection::state() const {
-  return this->current_state;
-}
+Connection::State WebRtcConnection::state() const { return this->state_value; }
 
 void WebRtcConnection::close() {
-  if (this->reliable_dc >= 0) {
-    this->detach_channel(this->reliable_dc);
-    rtcDelete(this->reliable_dc);
-    this->reliable_dc = -1;
+  this->signaller->disconnect();
+  this->channels->close();
+  this->state_value = kDead;
+}
+
+bool WebRtcConnection::start(bool offerer) {
+  if (this->started) {
+    return false;
   }
 
-  if (this->unreliable_dc >= 0) {
-    this->detach_channel(this->unreliable_dc);
-    rtcDelete(this->unreliable_dc);
-    this->unreliable_dc = -1;
+  this->started = true;
+  this->offerer = offerer;
+
+  if (!this->signaller->connect(this->code, offerer)) {
+    this->state_value = kFailed;
+    return false;
   }
 
-  if (this->pc >= 0) {
-    // Detach first: deleting returns straight into our callbacks, which take
-    // locks that libdatachannel holds during deletion.
-    rtcSetClosedCallback(this->pc, nullptr);
-    rtcSetErrorCallback(this->pc, nullptr);
-    rtcSetDataChannelCallback(this->pc, nullptr);
-    rtcSetLocalDescriptionCallback(this->pc, nullptr);
-    rtcSetLocalCandidateCallback(this->pc, nullptr);
-    rtcDelete(this->pc);
-    this->pc = -1;
-  }
-
-  this->current_state = Connection::kDead;
-  this->max_payload = 0;
+  this->state_value = kConnecting;
+  return true;
 }
 
-void WebRtcConnection::wait(uint32_t timeout_ms) {
-  std::unique_lock<std::mutex> lock(this->mutex);
-  this->cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] {
-    return !this->events.empty() || !this->incoming.empty();
-  });
-}
+void WebRtcConnection::poll_connecting() {
+  this->signaller->poll();
+  this->channels->poll();
 
-void WebRtcConnection::on_description(int, const char* sdp, const char* type,
-                                      void* user_ptr) {
-  WebRtcConnection* connection = static_cast<WebRtcConnection*>(user_ptr);
-  std::lock_guard<std::mutex> guard(connection->mutex);
-  connection->description.first = sdp;
-  connection->description.second = type;
-}
-
-void WebRtcConnection::on_candidate(int, const char* cand, const char* mid,
-                                    void* user_ptr) {
-  WebRtcConnection* connection = static_cast<WebRtcConnection*>(user_ptr);
-  std::lock_guard<std::mutex> guard(connection->mutex);
-  connection->candidates.push(std::pair<std::string, std::string>(cand, mid));
-}
-
-void WebRtcConnection::on_datachannel(int, int dc, void* user_ptr) {
-  WebRtcConnection* connection = static_cast<WebRtcConnection*>(user_ptr);
-
-  char label[32] = {};
-  rtcGetDataChannelLabel(dc, label, sizeof(label));
-
-  if (strcmp(label, UNRELIABLE_LABEL) == 0) {
-    connection->unreliable_dc = dc;
-  } else {
-    connection->reliable_dc = dc;
-  }
-
-  connection->setup_channel(dc);
-}
-
-void WebRtcConnection::on_open(int dc, void* user_ptr) {
-  WebRtcConnection* connection = static_cast<WebRtcConnection*>(user_ptr);
-  connection->push_event(kEventOpen, dc);
-}
-
-void WebRtcConnection::on_close(int dc, void* user_ptr) {
-  WebRtcConnection* connection = static_cast<WebRtcConnection*>(user_ptr);
-  connection->push_event(kEventClosed, dc);
-}
-
-void WebRtcConnection::on_error(int dc, const char* error, void* user_ptr) {
-  LOG(ERROR) << "WebRtcConnection::on_error: " << error;
-  WebRtcConnection* connection = static_cast<WebRtcConnection*>(user_ptr);
-  connection->push_event(kEventFailed, dc);
-}
-
-void WebRtcConnection::on_message(int dc, const char* message, int size,
-                                  void* user_ptr) {
-  if (size < 0) {
-    LOG(WARNING) << "WebRtcConnection::on_message: dropped text message";
+  if (this->signaller->state() == WebRtcSignaller::kNotConnected) {
+    this->fail();
     return;
   }
 
-  WebRtcConnection* connection = static_cast<WebRtcConnection*>(user_ptr);
+  if (this->channels->state() == kReady) {
+    this->signaller->disconnect();
+    this->state_value = kReady;
+    return;
+  }
 
-  Message received;
-  received.bytes.assign(message, message + size);
-  received.reliable = dc == connection->reliable_dc.load();
+  if (this->channels->state() == kFailed) {
+    this->fail();
+    return;
+  }
 
-  std::lock_guard<std::mutex> guard(connection->mutex);
-  connection->incoming.push_back(std::move(received));
-  connection->cv.notify_one();
+  if (this->signaller->state() != WebRtcSignaller::kConnected) {
+    return;
+  }
+
+  const int64_t now = now_ms();
+
+  // Keep pinging until the channels are ready, not just until this side starts
+  // collecting. The answerer can collect on the offerer's ping first; if it
+  // stopped pinging there, the offerer would wait for a ping that never comes
+  // and no offer would ever be sent.
+  if (now >= this->next_ping_ms) {
+    this->next_ping_ms = now + CONNECT_PING_MS;
+
+    if (!this->signaller->send_ping()) {
+      this->fail();
+      return;
+    }
+  }
+
+  WebRtcSignaller::Event event = {};
+  if (!this->collecting) {
+    if (!this->signaller->receive(&event)) {
+      return;
+    }
+
+    // The server answers fail to every message while no peer has joined.
+    if (event.kind == WebRtcSignaller::Event::kFail) {
+      return;
+    }
+
+    this->collecting = true;
+    this->channels->start_collecting(this->offerer);
+
+    if (!this->apply_event(event)) {
+      this->fail();
+      return;
+    }
+  }
+
+  while (this->signaller->receive(&event)) {
+    if (!this->apply_event(event)) {
+      this->fail();
+      return;
+    }
+  }
+
+  if (this->channels->state() == kFailed) {
+    this->fail();
+    return;
+  }
+
+  this->send_local();
 }
 
-void WebRtcConnection::setup_channel(int dc) {
-  rtcSetOpenCallback(dc, WebRtcConnection::on_open);
-  rtcSetClosedCallback(dc, WebRtcConnection::on_close);
-  rtcSetErrorCallback(dc, WebRtcConnection::on_error);
-  rtcSetMessageCallback(dc, WebRtcConnection::on_message);
+bool WebRtcConnection::apply_event(const WebRtcSignaller::Event& event) {
+  switch (event.kind) {
+    case WebRtcSignaller::Event::kPing:
+      return true;
+    case WebRtcSignaller::Event::kDescription:
+      this->channels->set_remote_description(event.first, event.second);
+      return true;
+    case WebRtcSignaller::Event::kCandidate:
+      this->channels->add_candidate(event.first, event.second);
+      return true;
+    case WebRtcSignaller::Event::kFail:
+      return false;
+  }
+
+  return false;
 }
 
-void WebRtcConnection::detach_channel(int dc) {
-  rtcSetOpenCallback(dc, nullptr);
-  rtcSetClosedCallback(dc, nullptr);
-  rtcSetErrorCallback(dc, nullptr);
-  rtcSetMessageCallback(dc, nullptr);
+void WebRtcConnection::send_local() {
+  const std::pair<std::string, std::string> description =
+      this->channels->local_description();
+  if (!description.first.empty()) {
+    this->signaller->send_description(description.first, description.second);
+  }
+
+  const std::pair<std::string, std::string> candidate =
+      this->channels->candidate();
+  if (!candidate.first.empty()) {
+    this->signaller->send_candidate(candidate.first, candidate.second);
+  }
 }
 
-void WebRtcConnection::push_event(EventKind kind, int dc) {
-  std::lock_guard<std::mutex> guard(this->mutex);
-  this->events.push(Event{kind, dc});
-  this->cv.notify_one();
+void WebRtcConnection::fail() {
+  this->signaller->disconnect();
+  this->channels->close();
+  this->state_value = kFailed;
 }
 
 };  // namespace thoom

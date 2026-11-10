@@ -52,6 +52,7 @@ add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
 set(THOOM_ENGINE_LIBS
   thoom_audio
+  thoom_comms
   thoom_hud
   thoom_input
   thoom_map
