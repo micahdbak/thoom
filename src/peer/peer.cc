@@ -77,6 +77,8 @@ Peer::~Peer() {
 
 uint64_t Peer::get_state() const { return this->state.load(); }
 
+bool Peer::is_host() const { return this->host.load(); }
+
 std::string Peer::get_connection_code() {
   std::lock_guard<std::mutex> guard(this->connection_code_mutex);
   return this->connection_code;

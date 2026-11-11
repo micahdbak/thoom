@@ -46,6 +46,7 @@ class Peer {
   ~Peer();
 
   uint64_t get_state() const;
+  bool is_host() const;
 
   std::string get_connection_code();
   void set_connection_code(std::string code);
