@@ -38,8 +38,7 @@ class SceneTest : public ::testing::Test {
     ASSERT_TRUE(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"));
     ASSERT_TRUE(SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy"));
 
-    ASSERT_TRUE(
-        thoom_init("thoom scene test", 320, 240, false, false, 0, nullptr));
+    ASSERT_TRUE(thoom_init("thoom scene test", 320, 240, 0, nullptr));
     ASSERT_TRUE(thoom::Scene::init());
 
     thoom::Scene::instance->register_objects(kLocalObjects);
@@ -61,8 +60,12 @@ class SceneTest : public ::testing::Test {
   }
 };
 
-TEST_F(SceneTest, OfflineEngineHasHostAuthority) {
-  EXPECT_EQ(thoom::PeerIdentity::instance->get_current(), THOOM_PID_HOST);
+TEST_F(SceneTest, OfflineEngineHasNoAuthority) {
+  EXPECT_EQ(thoom::PeerIdentity::instance->get_current(), THOOM_PID_INVALID);
+}
+
+void become_host() {
+  thoom::PeerIdentity::instance->set_current(THOOM_PID_HOST);
 }
 
 TEST_F(SceneTest, GidCompositionRoundTrips) {
@@ -80,6 +83,8 @@ TEST_F(SceneTest, GidCompositionRoundTrips) {
 }
 
 TEST_F(SceneTest, ReplicatedSpawnTakesGidFromPidAndLid) {
+  become_host();
+
   TestObject* object = this->spawn("test_replicated");
   ASSERT_NE(object, nullptr);
 
@@ -104,6 +109,8 @@ TEST_F(SceneTest, LocalSpawnHasNoNetworkIdentity) {
 }
 
 TEST_F(SceneTest, EachObjectTakesTheNextLid) {
+  become_host();
+
   TestObject* first = this->spawn("test_replicated");
   ASSERT_NE(first, nullptr);
 
@@ -130,6 +137,8 @@ TEST_F(SceneTest, GidZeroIsAValidLiveId) {
 }
 
 TEST_F(SceneTest, DuplicateGidIsRefused) {
+  become_host();
+
   TestObject* original = this->spawn("test_replicated");
   ASSERT_NE(original, nullptr);
 

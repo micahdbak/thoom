@@ -40,7 +40,10 @@ thoom_pid PeerIdentity::issue() {
 thoom_pid PeerIdentity::get_current() const { return this->current_pid.load(); }
 
 void PeerIdentity::set_current(thoom_pid new_pid) {
-  this->current_pid.store(new_pid);
+  const thoom_pid previous = this->current_pid.exchange(new_pid);
+  if (previous == new_pid) {
+    return;
+  }
 
   if (new_pid == THOOM_PID_INVALID) {
     LOG(INFO) << "PeerIdentity: current pid cleared";

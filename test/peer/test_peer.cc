@@ -76,8 +76,6 @@ void receive_all(thoom::Peer* peer, char side, int* received) {
 }
 
 std::string start_room(thoom::Peer* host) {
-  host->set_offerer(false);
-
   if (!wait_until([host] { return !host->get_connection_code().empty(); },
                   kConnectTimeoutMs)) {
     ADD_FAILURE() << "the host never got a connection code. Is a signalling "
@@ -90,7 +88,6 @@ std::string start_room(thoom::Peer* host) {
 
 bool connect_guest(thoom::Peer* host, thoom::Peer* guest,
                    const std::string& code) {
-  guest->set_offerer(true);
   guest->set_connection_code(code);
 
   return wait_until(
@@ -145,8 +142,7 @@ TEST(Peer, TwoInstancesConnectExchangeAndClose) {
 
   EXPECT_EQ(thoom::Peer::instance, nullptr);
 
-  thoom::Peer host(false);
-  host.set_offerer(false);
+  thoom::Peer host(true);
 
   ASSERT_TRUE(
       wait_until([&host] { return !host.get_connection_code().empty(); },
@@ -158,8 +154,7 @@ TEST(Peer, TwoInstancesConnectExchangeAndClose) {
   EXPECT_EQ(code.size(), 6u);
 
   {
-    thoom::Peer guest(true);
-    guest.set_offerer(true);
+    thoom::Peer guest(false);
     guest.set_connection_code(code);
 
     ASSERT_TRUE(wait_until(
@@ -204,8 +199,7 @@ TEST(Peer, SecondGuestJoinsAfterFirstLeaves) {
   ASSERT_EQ(SDL_setenv_unsafe("THOOM_SIGNALLING_URL", LOCAL_SIGNALLING_URL, 0),
             0);
 
-  thoom::Peer host(false);
-  host.set_offerer(false);
+  thoom::Peer host(true);
 
   ASSERT_TRUE(
       wait_until([&host] { return !host.get_connection_code().empty(); },
@@ -216,8 +210,7 @@ TEST(Peer, SecondGuestJoinsAfterFirstLeaves) {
   const std::string code = host.get_connection_code();
 
   {
-    thoom::Peer guest(true);
-    guest.set_offerer(true);
+    thoom::Peer guest(false);
     guest.set_connection_code(code);
 
     ASSERT_TRUE(wait_until(
@@ -235,8 +228,7 @@ TEST(Peer, SecondGuestJoinsAfterFirstLeaves) {
       kLeaveTimeoutMs))
       << "the host did not notice the first guest leaving";
 
-  thoom::Peer second(true);
-  second.set_offerer(true);
+  thoom::Peer second(false);
   second.set_connection_code(code);
 
   EXPECT_TRUE(wait_until(
@@ -250,26 +242,25 @@ TEST(Peer, SecondGuestJoinsAfterFirstLeaves) {
       << host.get_state() << " and the guest is " << second.get_state();
 }
 
-TEST(Peer, GuestRejoinsAfterReset) {
+TEST(Peer, GuestRejoinsWithNewInstance) {
   ASSERT_EQ(SDL_setenv_unsafe("THOOM_SIGNALLING_URL", LOCAL_SIGNALLING_URL, 0),
             0);
 
-  thoom::Peer host(false);
+  thoom::Peer host(true);
   const std::string code = start_room(&host);
   ASSERT_FALSE(code.empty());
 
-  thoom::Peer guest(true);
-  ASSERT_TRUE(connect_guest(&host, &guest, code));
-  exchange(&host, &guest, "first");
+  {
+    thoom::Peer guest(false);
+    ASSERT_TRUE(connect_guest(&host, &guest, code));
+    exchange(&host, &guest, "first");
+  }
 
-  guest.set_state(thoom::Peer::kStateTryReset);
-  EXPECT_TRUE(wait_until(
-      [&guest] { return guest.get_state() == thoom::Peer::kStateNoConnection; },
-      kLeaveTimeoutMs));
-  EXPECT_TRUE(wait_leave(&host)) << "the host did not notice the reset";
+  EXPECT_TRUE(wait_leave(&host)) << "the host did not notice the guest leaving";
 
+  thoom::Peer guest(false);
   EXPECT_TRUE(connect_guest(&host, &guest, code))
-      << "the same guest could not rejoin the same code after a reset";
+      << "a new guest could not join the same code";
   exchange(&host, &guest, "second");
 }
 
@@ -277,7 +268,7 @@ TEST(Peer, GuestsJoinInTurn) {
   ASSERT_EQ(SDL_setenv_unsafe("THOOM_SIGNALLING_URL", LOCAL_SIGNALLING_URL, 0),
             0);
 
-  thoom::Peer host(false);
+  thoom::Peer host(true);
   const std::string code = start_room(&host);
   ASSERT_FALSE(code.empty());
 
@@ -285,7 +276,7 @@ TEST(Peer, GuestsJoinInTurn) {
     const std::string turn = "turn-" + std::to_string(i);
 
     {
-      thoom::Peer guest(true);
+      thoom::Peer guest(false);
       ASSERT_TRUE(connect_guest(&host, &guest, code))
           << "guest " << i << " never joined";
       exchange(&host, &guest, turn);
@@ -300,22 +291,21 @@ TEST(Peer, GuestLeavesDuringHandshake) {
   ASSERT_EQ(SDL_setenv_unsafe("THOOM_SIGNALLING_URL", LOCAL_SIGNALLING_URL, 0),
             0);
 
-  thoom::Peer host(false);
+  thoom::Peer host(true);
   const std::string code = start_room(&host);
   ASSERT_FALSE(code.empty());
 
   // A guest that disappears before its channels open leaves a half-finished
   // link behind, which the host has to clear before it can take another one.
   {
-    thoom::Peer early(true);
-    early.set_offerer(true);
+    thoom::Peer early(false);
     early.set_connection_code(code);
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-  thoom::Peer guest(true);
+  thoom::Peer guest(false);
   EXPECT_TRUE(connect_guest(&host, &guest, code))
       << "the host did not accept a guest after a half-finished join";
   exchange(&host, &guest, "after-early-leave");
@@ -325,11 +315,11 @@ TEST(Peer, HostLeavesEndsTheGuest) {
   ASSERT_EQ(SDL_setenv_unsafe("THOOM_SIGNALLING_URL", LOCAL_SIGNALLING_URL, 0),
             0);
 
-  thoom::Peer* host = new thoom::Peer(false);
+  thoom::Peer* host = new thoom::Peer(true);
   const std::string code = start_room(host);
   ASSERT_FALSE(code.empty());
 
-  thoom::Peer guest(true);
+  thoom::Peer guest(false);
   ASSERT_TRUE(connect_guest(host, &guest, code));
   exchange(host, &guest, "before-the-host-leaves");
 

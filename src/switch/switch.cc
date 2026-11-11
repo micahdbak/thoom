@@ -51,7 +51,6 @@ bool Switch::host(const Options& options) {
 
   this->options = options;
   this->role = kRoleHost;
-  PeerIdentity::instance->set_current(THOOM_PID_HOST);
 
   if (!this->open_room(&this->token) || this->token.empty()) {
     LOG(ERROR) << "Switch: the room could not be opened";
@@ -62,6 +61,7 @@ bool Switch::host(const Options& options) {
 
   this->room_open = true;
   this->state = kListening;
+  PeerIdentity::instance->set_current(THOOM_PID_HOST);
   LOG(INFO) << "Switch: hosting " << this->token;
   return true;
 }
@@ -74,7 +74,6 @@ bool Switch::join(const Options& options, const char* code) {
   this->options = options;
   this->role = kRoleGuest;
   this->token = code;
-  PeerIdentity::instance->set_current(THOOM_PID_INVALID);
 
   if (!this->enter_room(this->token)) {
     LOG(ERROR) << "Switch: the room " << this->token << " could not be entered";
@@ -85,6 +84,7 @@ bool Switch::join(const Options& options, const char* code) {
 
   this->room_open = true;
   this->state = kJoining;
+  PeerIdentity::instance->set_current(THOOM_PID_INVALID);
   LOG(INFO) << "Switch: joining " << this->token;
   return true;
 }
