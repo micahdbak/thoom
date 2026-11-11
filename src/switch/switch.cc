@@ -38,6 +38,13 @@ static const char* reason_name(Switch::Reason reason) {
   return "unknown";
 }
 
+Switch::~Switch() {
+  // A live switch owns the acting pid; destroying it must not leave one set.
+  if (this->pid_owned && PeerIdentity::instance != nullptr) {
+    PeerIdentity::instance->set_current(THOOM_PID_INVALID);
+  }
+}
+
 static int64_t now_ms() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::steady_clock::now().time_since_epoch())
@@ -54,6 +61,7 @@ bool Switch::host(const Options& options) {
 
   if (!this->open_room(&this->token) || this->token.empty()) {
     LOG(ERROR) << "Switch: the room could not be opened";
+    PeerIdentity::instance->set_current(THOOM_PID_INVALID);
     this->state = kClosed;
     this->reason = kReasonTransport;
     return false;
@@ -62,6 +70,7 @@ bool Switch::host(const Options& options) {
   this->room_open = true;
   this->state = kListening;
   PeerIdentity::instance->set_current(THOOM_PID_HOST);
+  this->pid_owned = true;
   LOG(INFO) << "Switch: hosting " << this->token;
   return true;
 }
@@ -77,6 +86,7 @@ bool Switch::join(const Options& options, const char* code) {
 
   if (!this->enter_room(this->token)) {
     LOG(ERROR) << "Switch: the room " << this->token << " could not be entered";
+    PeerIdentity::instance->set_current(THOOM_PID_INVALID);
     this->state = kClosed;
     this->reason = kReasonTransport;
     return false;
@@ -117,6 +127,7 @@ void Switch::close() {
     }
 
     PeerIdentity::instance->set_current(THOOM_PID_INVALID);
+    this->pid_owned = false;
     LOG(INFO) << "Switch: closed: " << reason_name(this->reason);
   }
 
@@ -334,6 +345,7 @@ void Switch::finish(Reason reason) {
   this->state = kClosed;
   this->reason = reason;
   PeerIdentity::instance->set_current(THOOM_PID_INVALID);
+  this->pid_owned = false;
   LOG(INFO) << "Switch: session ended: " << reason_name(reason);
 }
 
@@ -461,6 +473,7 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
   }
 
   PeerIdentity::instance->set_current(pid);
+  this->pid_owned = true;
   peer->pid = THOOM_PID_HOST;
   peer->state = kPeerReady;
   this->state = kJoined;

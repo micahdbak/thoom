@@ -58,7 +58,7 @@ class Switch {
   };
 
   Switch() = default;
-  virtual ~Switch() = default;
+  virtual ~Switch();
 
   bool host(const Options& options);
   bool join(const Options& options, const char* code);
@@ -141,6 +141,8 @@ class Switch {
   uint8_t role = kRoleHost;
   bool room_open = false;
   std::string token;
+
+  bool pid_owned = false;
 
   Peer peers[kSwitchMaxPeers];
 

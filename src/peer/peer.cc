@@ -109,8 +109,10 @@ void Peer::join_room(const std::string& code) {
   }
 
   // A switch is one shot, so a retry after a closed attempt needs a new one.
+  // Closing first guarantees the old attempt no longer owns the acting pid.
   if (this->net->get_state() != Switch::kIdle) {
     Switch* replacement = new WebRtcSwitch();
+    this->net->close();
     delete this->net;
     this->net = replacement;
   }
