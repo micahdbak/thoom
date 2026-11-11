@@ -61,6 +61,10 @@ class SceneTest : public ::testing::Test {
   }
 };
 
+TEST_F(SceneTest, OfflineEngineHasHostAuthority) {
+  EXPECT_EQ(thoom::PeerIdentity::instance->get_current(), THOOM_PID_HOST);
+}
+
 TEST_F(SceneTest, GidCompositionRoundTrips) {
   EXPECT_EQ(THOOM_GID_COMPOSE(THOOM_PID_HOST, 0), 0u);
   EXPECT_EQ(THOOM_GID_PID(0), THOOM_PID_HOST);
@@ -80,10 +84,9 @@ TEST_F(SceneTest, ReplicatedSpawnTakesGidFromPidAndLid) {
   ASSERT_NE(object, nullptr);
 
   EXPECT_TRUE(object->replicated);
-  EXPECT_EQ(object->owner_pid,
-            thoom::PeerIdentity::instance->current_pid.load());
+  EXPECT_EQ(object->owner_pid, thoom::PeerIdentity::instance->get_current());
   EXPECT_EQ(object->gid,
-            THOOM_GID_COMPOSE(thoom::PeerIdentity::instance->current_pid.load(),
+            THOOM_GID_COMPOSE(thoom::PeerIdentity::instance->get_current(),
                               object->lid));
   EXPECT_NE(object->gid, THOOM_GID_INVALID);
   EXPECT_EQ(thoom::Scene::instance->find_gid_object(object->gid), object);
@@ -142,7 +145,7 @@ TEST_F(SceneTest, DuplicateGidIsRefused) {
 }
 
 TEST_F(SceneTest, ReplicatedSpawnNeedsAPid) {
-  thoom::PeerIdentity::instance->current_pid.store(THOOM_PID_INVALID);
+  thoom::PeerIdentity::instance->set_current(THOOM_PID_INVALID);
 
   EXPECT_EQ(this->spawn("test_replicated"), nullptr);
 

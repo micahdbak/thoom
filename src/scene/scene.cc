@@ -230,7 +230,7 @@ void Scene::step() {
 }
 
 void Scene::tick() {
-  const thoom_pid current_pid = PeerIdentity::instance->current_pid.load();
+  const thoom_pid current_pid = PeerIdentity::instance->get_current();
 
   // 16 and two thirds of a millisecond per tick, to track 60 ticks per second.
   this->ticks += 16;
@@ -363,7 +363,7 @@ Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
                   "can be unique";
   }
 
-  const thoom_pid current_pid = PeerIdentity::instance->current_pid.load();
+  const thoom_pid current_pid = PeerIdentity::instance->get_current();
 
   if (def.replicated && current_pid == THOOM_PID_INVALID) {
     LOG(ERROR) << "Scene::spawn_object error: '" << def.id

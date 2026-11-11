@@ -56,6 +56,10 @@ bool thoom_init(const char* title, uint32_t screen_width,
     goto quit_input;
   }
 
+  if (!peer) {
+    thoom::PeerIdentity::instance->set_current(THOOM_PID_HOST);
+  }
+
   if (peer && !thoom::Peer::init(offerer)) {
     goto quit_identity;
   }

@@ -23,9 +23,11 @@ class PeerIdentity {
   bool contains(thoom_pid pid) const;
   thoom_pid propose();
 
-  std::atomic<thoom_pid> current_pid{THOOM_PID_HOST};
+  thoom_pid get_current() const;
+  void set_current(thoom_pid new_pid);
 
  private:
+  std::atomic<thoom_pid> current_pid{THOOM_PID_INVALID};
   mutable std::mutex mutex;
   std::unordered_set<thoom_pid> reserved;
   std::mt19937 random;

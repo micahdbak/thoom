@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "absl/log/log.h"
+#include "switch/peer_identity.h"
 #include "switch/switch.h"
 #include "thoom/thoom.h"
 #include "webrtc/webrtc_switch.h"
@@ -49,12 +50,20 @@ Peer::~Peer() {
     this->worker.join();
   }
 
+  PeerIdentity::instance->set_current(THOOM_PID_INVALID);
+
   delete this->net;
   this->net = nullptr;
 }
 
 void Peer::set_offerer(bool offerer) {
   this->offerer.store(offerer);
+
+  // Record the role's authority before the worker acts on it, so a scene that
+  // loads as soon as the role is chosen never mints ids without one.
+  PeerIdentity::instance->set_current(offerer ? THOOM_PID_INVALID
+                                              : THOOM_PID_HOST);
+
   this->commands.push(Command{Command::kRestart, std::string()});
 }
 
@@ -64,6 +73,12 @@ void Peer::set_state(uint64_t state) {
   this->state.store(state);
 
   if (state == kStateTryReset) {
+    // A reset ends a guest's session immediately; a host keeps its authority
+    // because its world continues across the replacement switch.
+    if (this->offerer.load()) {
+      PeerIdentity::instance->set_current(THOOM_PID_INVALID);
+    }
+
     this->commands.push(Command{Command::kRestart, std::string()});
   }
 }

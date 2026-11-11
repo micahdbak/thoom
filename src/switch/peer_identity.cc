@@ -46,6 +46,19 @@ bool PeerIdentity::contains(thoom_pid pid) const {
   return this->reserved.find(pid) != this->reserved.end();
 }
 
+thoom_pid PeerIdentity::get_current() const { return this->current_pid.load(); }
+
+void PeerIdentity::set_current(thoom_pid new_pid) {
+  this->current_pid.store(new_pid);
+
+  if (new_pid == THOOM_PID_INVALID) {
+    LOG(INFO) << "PeerIdentity: current pid cleared";
+    return;
+  }
+
+  LOG(INFO) << "PeerIdentity: current pid set to " << new_pid;
+}
+
 thoom_pid PeerIdentity::propose() {
   std::lock_guard<std::mutex> guard(this->mutex);
 

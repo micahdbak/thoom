@@ -15,6 +15,31 @@
 
 namespace thoom {
 
+static const char* reason_name(Switch::Reason reason) {
+  switch (reason) {
+    case Switch::kReasonNone:
+      return "none";
+    case Switch::kReasonVersion:
+      return "version";
+    case Switch::kReasonRole:
+      return "role";
+    case Switch::kReasonPid:
+      return "pid";
+    case Switch::kReasonFull:
+      return "full";
+    case Switch::kReasonProtocol:
+      return "protocol";
+    case Switch::kReasonTimeout:
+      return "timeout";
+    case Switch::kReasonTransport:
+      return "transport";
+    case Switch::kReasonClosed:
+      return "closed";
+  }
+
+  return "unknown";
+}
+
 static int64_t now_ms() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
              std::chrono::steady_clock::now().time_since_epoch())
@@ -28,9 +53,10 @@ bool Switch::host(const Options& options) {
 
   this->options = options;
   this->role = kRoleHost;
-  PeerIdentity::instance->current_pid.store(THOOM_PID_HOST);
+  PeerIdentity::instance->set_current(THOOM_PID_HOST);
 
   if (!this->open_room(&this->token) || this->token.empty()) {
+    LOG(ERROR) << "Switch: the room could not be opened";
     this->state = kClosed;
     this->reason = kReasonTransport;
     return false;
@@ -38,6 +64,7 @@ bool Switch::host(const Options& options) {
 
   this->room_open = true;
   this->state = kListening;
+  LOG(INFO) << "Switch: hosting " << this->token;
   return true;
 }
 
@@ -50,9 +77,10 @@ bool Switch::join(const Options& options, const char* code) {
   this->role = kRoleGuest;
   this->token = code;
   this->proposed_pid = PeerIdentity::instance->propose();
-  PeerIdentity::instance->current_pid.store(THOOM_PID_INVALID);
+  PeerIdentity::instance->set_current(THOOM_PID_INVALID);
 
   if (!this->enter_room(this->token)) {
+    LOG(ERROR) << "Switch: the room " << this->token << " could not be entered";
     this->state = kClosed;
     this->reason = kReasonTransport;
     return false;
@@ -60,6 +88,8 @@ bool Switch::join(const Options& options, const char* code) {
 
   this->room_open = true;
   this->state = kJoining;
+  LOG(INFO) << "Switch: joining " << this->token << " as pid "
+            << this->proposed_pid;
   return true;
 }
 
@@ -90,7 +120,8 @@ void Switch::close() {
       this->reason = kReasonClosed;
     }
 
-    PeerIdentity::instance->current_pid.store(THOOM_PID_INVALID);
+    PeerIdentity::instance->set_current(THOOM_PID_INVALID);
+    LOG(INFO) << "Switch: closed: " << reason_name(this->reason);
   }
 
   this->shutdown();
@@ -184,6 +215,8 @@ void Switch::on_open(PeerHandle handle) {
   }
 
   peer->deadline_ms = now_ms() + this->options.handshake_timeout_ms;
+  LOG(INFO) << "Switch: link " << handle << " opened as "
+            << (this->role == kRoleHost ? "host" : "guest");
 
   if (this->role == kRoleHost) {
     if (!this->can_accept()) {
@@ -238,6 +271,9 @@ void Switch::on_drop(PeerHandle handle, Reason reason) {
 
   this->remove_peer(peer);
 
+  LOG(INFO) << "Switch: link " << handle << " dropped: " << reason_name(reason)
+            << (ready ? " after ready" : " before ready");
+
   if (ready) {
     this->push_event(Event::kLeave, pid, reason);
   }
@@ -268,6 +304,10 @@ void Switch::expire_peers() {
       continue;
     }
 
+    LOG(INFO) << "Switch: link " << peer->handle
+              << (peer->state == kPeerHandshaking ? " handshake expired"
+                                                  : " reject flush expired");
+
     if (peer->state == kPeerHandshaking && this->role == kRoleGuest) {
       this->finish(kReasonTimeout);
     }
@@ -297,7 +337,8 @@ void Switch::finish(Reason reason) {
 
   this->state = kClosed;
   this->reason = reason;
-  PeerIdentity::instance->current_pid.store(THOOM_PID_INVALID);
+  PeerIdentity::instance->set_current(THOOM_PID_INVALID);
+  LOG(INFO) << "Switch: session ended: " << reason_name(reason);
 }
 
 void Switch::refuse(Peer* peer, Reason reason) {
@@ -309,6 +350,9 @@ void Switch::refuse(Peer* peer, Reason reason) {
   writer.write_u8(static_cast<uint8_t>(reason));
   this->send_frame(peer, kFrameReject, writer.bytes().data(),
                    static_cast<uint32_t>(writer.bytes().size()), true);
+
+  LOG(INFO) << "Switch: refused link " << peer->handle << ": "
+            << reason_name(reason);
 
   peer->state = kPeerRefused;
   peer->deadline_ms = now_ms() + this->options.reject_flush_ms;
@@ -377,7 +421,7 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
   // A collision is retryable, so the slot stays handshaking and keeps its
   // original deadline. The guest proposes another id on the same link.
   if (!PeerIdentity::instance->reserve(proposed)) {
-    LOG(INFO) << "Switch: pid " << proposed << " is already reserved";
+    LOG(INFO) << "Switch: pid " << proposed << " is taken, asking for another";
     this->reject_pid(peer);
     return;
   }
@@ -392,6 +436,7 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
 
   peer->pid = proposed;
   peer->state = kPeerReady;
+  LOG(INFO) << "Switch: admitted guest " << proposed;
   this->push_event(Event::kJoin, proposed, kReasonNone);
 }
 
@@ -425,14 +470,17 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
 
   if (pid == THOOM_PID_HOST || pid == THOOM_PID_INVALID ||
       pid != this->proposed_pid) {
+    LOG(WARNING) << "Switch: welcome pid " << pid << " does not match proposal "
+                 << this->proposed_pid;
     this->finish(kReasonProtocol);
     return;
   }
 
-  PeerIdentity::instance->current_pid.store(pid);
+  PeerIdentity::instance->set_current(pid);
   peer->pid = THOOM_PID_HOST;
   peer->state = kPeerReady;
   this->state = kJoined;
+  LOG(INFO) << "Switch: joined as pid " << pid;
   this->push_event(Event::kJoin, THOOM_PID_HOST, kReasonNone);
 }
 
@@ -467,6 +515,7 @@ void Switch::handle_reject(Peer* peer, const Frame& frame) {
     return;
   }
 
+  LOG(INFO) << "Switch: join rejected: " << reason_name(reason);
   this->finish(reason);
 }
 
