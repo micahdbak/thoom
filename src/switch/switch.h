@@ -58,7 +58,7 @@ class Switch {
   };
 
   Switch() = default;
-  virtual ~Switch() = default;
+  virtual ~Switch();
 
   bool host(const Options& options);
   bool join(const Options& options, const char* code);
@@ -72,7 +72,6 @@ class Switch {
   State get_state() const;
   Reason get_reason() const;
   const char* get_token() const;
-  thoom_pid get_local_pid() const;
   uint32_t peer_count() const;
   thoom_pid peer_pid(uint32_t index) const;
   bool peer_ready(thoom_pid pid) const;
@@ -123,6 +122,8 @@ class Switch {
   void handle_bye(Peer* peer);
   void handle_data(Peer* peer, const Frame& frame, bool reliable);
 
+  bool send_hello(Peer* peer);
+
   bool send_frame(const Peer* peer, uint8_t kind, const void* payload,
                   uint32_t size, bool reliable);
 
@@ -140,8 +141,8 @@ class Switch {
   uint8_t role = kRoleHost;
   bool room_open = false;
   std::string token;
-  thoom_pid local_pid = THOOM_PID_INVALID;
-  uint64_t next_pid = 1;
+
+  bool pid_owned = false;
 
   Peer peers[kSwitchMaxPeers];
 

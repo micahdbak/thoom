@@ -12,6 +12,7 @@
 #include "input/input.h"
 #include "peer/peer.h"
 #include "renderer/renderer.h"
+#include "switch/peer_identity.h"
 #include "texture/texture.h"
 #include "window/window.h"
 
@@ -20,8 +21,8 @@
 static bool log_initialized = false;
 
 bool thoom_init(const char* title, uint32_t screen_width,
-                uint32_t screen_height, bool peer, bool offerer,
-                uint32_t background, const struct hud_def* def) {
+                uint32_t screen_height, uint32_t background,
+                const struct hud_def* def) {
   if (!log_initialized) {
     absl::InitializeLog();
     absl::SetStderrThreshold(absl::LogSeverityAtLeast::kInfo);
@@ -51,18 +52,18 @@ bool thoom_init(const char* title, uint32_t screen_width,
     goto quit_audio;
   }
 
-  if (peer && !thoom::Peer::init(offerer)) {
+  if (!thoom::PeerIdentity::init()) {
     goto quit_input;
   }
 
   if (!thoom::Hud::init(background, hud)) {
-    goto quit_peer;
+    goto quit_identity;
   }
 
   return true;
 
-quit_peer:
-  thoom::Peer::quit();
+quit_identity:
+  thoom::PeerIdentity::quit();
 quit_input:
   thoom::Input::quit();
 quit_audio:
@@ -75,6 +76,10 @@ quit_window:
   thoom::Window::quit();
   return false;
 }
+
+bool thoom_room_init(bool host) { return thoom::Peer::init(host); }
+
+void thoom_room_quit(void) { thoom::Peer::quit(); }
 
 void thoom_poll_events(bool* quit) {
   SDL_Event event;
@@ -104,6 +109,7 @@ void thoom_poll_events(bool* quit) {
 void thoom_quit(void) {
   thoom::Hud::quit();
   thoom::Peer::quit();
+  thoom::PeerIdentity::quit();
   thoom::Input::quit();
   thoom::Audio::quit();
   thoom::Renderer::quit();

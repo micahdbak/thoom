@@ -7,7 +7,7 @@ TEST(Thoom, InitAndQuit) {
   ASSERT_TRUE(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"));
   ASSERT_TRUE(SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy"));
 
-  ASSERT_TRUE(thoom_init("thoom test", 320, 240, false, false, 0, nullptr));
+  ASSERT_TRUE(thoom_init("thoom test", 320, 240, 0, nullptr));
   thoom_quit();
 }
 

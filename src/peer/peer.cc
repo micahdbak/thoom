@@ -13,19 +13,24 @@
 #include "thoom/thoom.h"
 #include "webrtc/webrtc_switch.h"
 
-#define PEER_GUEST_PID ((thoom_pid)1)
-
 #define PEER_POLL_MS 1
 
 namespace thoom {
 
-bool Peer::init(bool offerer) {
+bool Peer::init(bool host) {
   if (Peer::instance != nullptr) {
     LOG(ERROR) << "Peer::init error: a peer already exists";
     return false;
   }
 
-  Peer::instance = new Peer(offerer);
+  Peer* peer = new Peer(host);
+
+  if (!peer->ready) {
+    delete peer;
+    return false;
+  }
+
+  Peer::instance = peer;
   return true;
 }
 
@@ -38,10 +43,22 @@ void Peer::quit() {
   Peer::instance = nullptr;
 }
 
-Peer::Peer(bool offerer) {
+Peer::Peer(bool host) {
+  this->host.store(host);
   this->net = new WebRtcSwitch();
-  this->worker = std::thread(&Peer::run, this);
-  this->set_offerer(offerer);
+  this->ready = !host;
+
+  if (host) {
+    this->ready = this->net->host(Switch::Options());
+
+    if (this->ready) {
+      this->store_code(this->net->get_token());
+    }
+  }
+
+  if (this->ready) {
+    this->worker = std::thread(&Peer::run, this);
+  }
 }
 
 Peer::~Peer() {
@@ -51,29 +68,14 @@ Peer::~Peer() {
     this->worker.join();
   }
 
-  delete this->net;
-  this->net = nullptr;
-}
-
-void Peer::set_offerer(bool offerer) {
-  this->offerer.store(offerer);
-  this->set_pid(offerer ? PEER_GUEST_PID : THOOM_PID_HOST);
-  this->commands.push(Command{Command::kRestart, std::string()});
-}
-
-thoom_pid Peer::get_pid() const { return this->pid.load(); }
-
-void Peer::set_pid(thoom_pid pid) { this->pid.store(pid); }
-
-uint64_t Peer::get_state() const { return this->state.load(); }
-
-void Peer::set_state(uint64_t state) {
-  this->state.store(state);
-
-  if (state == kStateTryReset) {
-    this->commands.push(Command{Command::kRestart, std::string()});
+  if (this->net != nullptr) {
+    this->net->close();
+    delete this->net;
+    this->net = nullptr;
   }
 }
+
+uint64_t Peer::get_state() const { return this->state.load(); }
 
 std::string Peer::get_connection_code() {
   std::lock_guard<std::mutex> guard(this->connection_code_mutex);
@@ -82,25 +84,15 @@ std::string Peer::get_connection_code() {
 
 void Peer::set_connection_code(std::string code) {
   this->store_code(code);
-  this->commands.push(Command{Command::kJoin, std::move(code)});
+  this->join_commands.push(std::move(code));
 }
 
 void Peer::run() {
   while (this->running.load()) {
-    std::queue<Command> batch = this->commands.take_all();
+    std::queue<std::string> batch = this->join_commands.take_all();
 
     while (!batch.empty()) {
-      const Command& command = batch.front();
-
-      // Only a queued command replaces the switch, because a switch is one
-      // shot. The steady state is poll_switch below.
-      this->begin_session();
-
-      if (command.kind == Command::kJoin &&
-          !this->net->join(Switch::Options(), command.code.c_str())) {
-        LOG(ERROR) << "Peer: the room " << command.code << " was not entered";
-      }
-
+      this->join_room(batch.front());
       batch.pop();
     }
 
@@ -110,36 +102,31 @@ void Peer::run() {
   }
 }
 
-void Peer::begin_session() {
-  // The replacement is created before the old switch is destroyed, so the
-  // library stays loaded instead of being unloaded and reloaded on every
-  // restart.
-  Switch* replacement = new WebRtcSwitch();
+void Peer::join_room(const std::string& code) {
+  if (this->host.load()) {
+    LOG(ERROR) << "Peer: a host cannot join a room";
+    return;
+  }
 
-  delete this->net;
-  this->net = replacement;
+  // A switch is one shot, so a retry after a closed attempt needs a new one.
+  // Closing first guarantees the old attempt no longer owns the acting pid.
+  if (this->net->get_state() != Switch::kIdle) {
+    Switch* replacement = new WebRtcSwitch();
+    this->net->close();
+    delete this->net;
+    this->net = replacement;
+  }
 
   this->send_queue.take_all();
   this->recv_queue.take_all();
 
-  if (!this->offerer.load()) {
-    if (this->net->host(Switch::Options())) {
-      this->store_code(this->net->get_token());
-    } else {
-      LOG(ERROR) << "Peer: a room could not be opened";
-    }
+  if (!this->net->join(Switch::Options(), code.c_str())) {
+    LOG(ERROR) << "Peer: the room " << code << " was not entered";
   }
-
-  this->publish_state();
 }
 
 void Peer::poll_switch() {
   this->net->poll();
-
-  const thoom_pid local = this->net->get_local_pid();
-  if (local != THOOM_PID_INVALID) {
-    this->set_pid(local);
-  }
 
   if (this->net->peer_count() > 0) {
     const thoom_pid remote = this->net->peer_pid(0);

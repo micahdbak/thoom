@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
   struct hud_def hud = {};
 
   if (!thoom_init("Thoom Engine", THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT,
-                  false, false, kBackground.val, &hud)) {
+                  kBackground.val, &hud)) {
     return 1;
   }
 

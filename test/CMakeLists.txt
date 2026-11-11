@@ -21,4 +21,5 @@ target_link_libraries(test_log
     thoom)
 
 add_subdirectory(peer)
+add_subdirectory(scene)
 add_subdirectory(switch)

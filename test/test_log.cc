@@ -10,7 +10,7 @@
 TEST(ThoomLog, FormatsEveryLevel) {
   ASSERT_TRUE(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"));
   ASSERT_TRUE(SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy"));
-  ASSERT_TRUE(thoom_init("thoom log test", 320, 240, false, false, 0, nullptr));
+  ASSERT_TRUE(thoom_init("thoom log test", 320, 240, 0, nullptr));
 
   testing::internal::CaptureStderr();
 
@@ -31,7 +31,7 @@ TEST(ThoomLog, FormatsEveryLevel) {
 TEST(ThoomLog, FatalAborts) {
   ASSERT_TRUE(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"));
   ASSERT_TRUE(SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy"));
-  ASSERT_TRUE(thoom_init("thoom log test", 320, 240, false, false, 0, nullptr));
+  ASSERT_TRUE(thoom_init("thoom log test", 320, 240, 0, nullptr));
 
   EXPECT_DEATH(thoom_log_fatal("fatal %s %d", "text", 3), "fatal text 3");
 

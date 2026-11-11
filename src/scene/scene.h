@@ -44,7 +44,7 @@ class Scene {
 
   void create_object(const std::string& id, const std::string& options);
 
-  void register_gid_object(Object* object);
+  bool register_gid_object(Object* object);
   void unregister_gid_object(Object* object);
 
   Object* find_object(thoom_lid lid);
@@ -58,7 +58,6 @@ class Scene {
   uint64_t ticks = 0;
   float delta = 1.0f / 60.0f;  // simulation time
   Map* map = nullptr;
-  thoom_pid local_pid = THOOM_PID_HOST;
 
  private:
   struct MapRequest {
