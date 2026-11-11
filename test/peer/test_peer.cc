@@ -9,6 +9,7 @@
 
 #include "SDL3/SDL.h"
 #include "peer/peer.h"
+#include "switch/peer_identity.h"
 
 #define LOCAL_SIGNALLING_URL "ws://localhost:8080/sc/"
 
@@ -342,5 +343,12 @@ TEST(Peer, HostLeavesEndsTheGuest) {
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+
+  if (!thoom::PeerIdentity::init()) {
+    return 1;
+  }
+
+  const int result = RUN_ALL_TESTS();
+  thoom::PeerIdentity::quit();
+  return result;
 }

@@ -32,6 +32,7 @@ class Switch {
     kReasonNone = 0,
     kReasonVersion,
     kReasonRole,
+    kReasonPid,
     kReasonFull,
     kReasonProtocol,
     kReasonTimeout,
@@ -123,6 +124,9 @@ class Switch {
   void handle_bye(Peer* peer);
   void handle_data(Peer* peer, const Frame& frame, bool reliable);
 
+  bool send_hello(Peer* peer);
+  void reject_pid(Peer* peer);
+
   bool send_frame(const Peer* peer, uint8_t kind, const void* payload,
                   uint32_t size, bool reliable);
 
@@ -141,7 +145,7 @@ class Switch {
   bool room_open = false;
   std::string token;
   thoom_pid local_pid = THOOM_PID_INVALID;
-  thoom_pid next_pid = 1;
+  thoom_pid proposed_pid = THOOM_PID_INVALID;
 
   Peer peers[kSwitchMaxPeers];
 

@@ -12,6 +12,7 @@
 #include "input/input.h"
 #include "peer/peer.h"
 #include "renderer/renderer.h"
+#include "switch/peer_identity.h"
 #include "texture/texture.h"
 #include "window/window.h"
 
@@ -51,8 +52,12 @@ bool thoom_init(const char* title, uint32_t screen_width,
     goto quit_audio;
   }
 
-  if (peer && !thoom::Peer::init(offerer)) {
+  if (!thoom::PeerIdentity::init()) {
     goto quit_input;
+  }
+
+  if (peer && !thoom::Peer::init(offerer)) {
+    goto quit_identity;
   }
 
   if (!thoom::Hud::init(background, hud)) {
@@ -63,6 +68,8 @@ bool thoom_init(const char* title, uint32_t screen_width,
 
 quit_peer:
   thoom::Peer::quit();
+quit_identity:
+  thoom::PeerIdentity::quit();
 quit_input:
   thoom::Input::quit();
 quit_audio:
@@ -104,6 +111,7 @@ void thoom_poll_events(bool* quit) {
 void thoom_quit(void) {
   thoom::Hud::quit();
   thoom::Peer::quit();
+  thoom::PeerIdentity::quit();
   thoom::Input::quit();
   thoom::Audio::quit();
   thoom::Renderer::quit();

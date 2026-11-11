@@ -7,8 +7,10 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "switch/bytes.h"
 #include "switch/frame.h"
+#include "switch/peer_identity.h"
 #include "thoom/thoom.h"
 
 namespace thoom {
@@ -47,6 +49,7 @@ bool Switch::join(const Options& options, const char* code) {
   this->options = options;
   this->role = kRoleGuest;
   this->token = code;
+  this->proposed_pid = PeerIdentity::instance->propose();
 
   if (!this->enter_room(this->token)) {
     this->state = kClosed;
@@ -188,10 +191,7 @@ void Switch::on_open(PeerHandle handle) {
     return;
   }
 
-  ByteWriter writer;
-  writer.write_u8(kRoleGuest);
-  if (!this->send_frame(peer, kFrameHello, writer.bytes().data(),
-                        static_cast<uint32_t>(writer.bytes().size()), true)) {
+  if (!this->send_hello(peer)) {
     this->finish(kReasonTransport);
   }
 }
@@ -356,6 +356,7 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
 
   ByteReader reader(frame.payload, frame.size);
   const uint8_t hello_role = reader.read_u8();
+  const thoom_pid proposed = reader.read_u32();
   if (!reader.ok() || reader.remaining() != 0) {
     this->refuse(peer, kReasonProtocol);
     return;
@@ -371,24 +372,40 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
     return;
   }
 
-  if (this->next_pid == THOOM_PID_INVALID) {
-    this->refuse(peer, kReasonFull);
+  // A collision is retryable, so the slot stays handshaking and keeps its
+  // original deadline. The guest proposes another id on the same link.
+  if (!PeerIdentity::instance->reserve(proposed)) {
+    LOG(INFO) << "Switch: pid " << proposed << " is already reserved";
+    this->reject_pid(peer);
     return;
   }
 
-  const thoom_pid pid = this->next_pid++;
-
   ByteWriter writer;
-  writer.write_u64(pid);
+  writer.write_u32(proposed);
   if (!this->send_frame(peer, kFrameWelcome, writer.bytes().data(),
                         static_cast<uint32_t>(writer.bytes().size()), true)) {
     this->abandon(peer);
     return;
   }
 
-  peer->pid = pid;
+  peer->pid = proposed;
   peer->state = kPeerReady;
-  this->push_event(Event::kJoin, pid, kReasonNone);
+  this->push_event(Event::kJoin, proposed, kReasonNone);
+}
+
+bool Switch::send_hello(Peer* peer) {
+  ByteWriter writer;
+  writer.write_u8(kRoleGuest);
+  writer.write_u32(this->proposed_pid);
+  return this->send_frame(peer, kFrameHello, writer.bytes().data(),
+                          static_cast<uint32_t>(writer.bytes().size()), true);
+}
+
+void Switch::reject_pid(Peer* peer) {
+  ByteWriter writer;
+  writer.write_u8(static_cast<uint8_t>(kReasonPid));
+  this->send_frame(peer, kFrameReject, writer.bytes().data(),
+                   static_cast<uint32_t>(writer.bytes().size()), true);
 }
 
 void Switch::handle_welcome(Peer* peer, const Frame& frame) {
@@ -398,13 +415,14 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
   }
 
   ByteReader reader(frame.payload, frame.size);
-  const thoom_pid pid = reader.read_u64();
+  const thoom_pid pid = reader.read_u32();
   if (!reader.ok() || reader.remaining() != 0) {
     this->finish(kReasonProtocol);
     return;
   }
 
-  if (pid == THOOM_PID_HOST || pid == THOOM_PID_INVALID) {
+  if (pid == THOOM_PID_HOST || pid == THOOM_PID_INVALID ||
+      pid != this->proposed_pid) {
     this->finish(kReasonProtocol);
     return;
   }
@@ -432,6 +450,19 @@ void Switch::handle_reject(Peer* peer, const Frame& frame) {
   Reason reason = static_cast<Reason>(code);
   if (reason < kReasonVersion || reason > kReasonTransport) {
     reason = kReasonProtocol;
+  }
+
+  // A reserved pid only rejects this proposal, not the peer: retry on the same
+  // link so the guest keeps its one handshake deadline.
+  if (reason == kReasonPid && peer->state == kPeerHandshaking) {
+    LOG(INFO) << "Switch: pid " << this->proposed_pid << " was taken";
+    this->proposed_pid = PeerIdentity::instance->propose();
+
+    if (!this->send_hello(peer)) {
+      this->finish(kReasonTransport);
+    }
+
+    return;
   }
 
   this->finish(reason);

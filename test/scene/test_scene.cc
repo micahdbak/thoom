@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <cstdint>
 #include <string>
 
 #include "SDL3/SDL.h"

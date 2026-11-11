@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "switch/frame.h"
+#include "switch/peer_identity.h"
 #include "switch/switch.h"
 #include "thoom/thoom.h"
 
@@ -39,11 +40,27 @@ std::vector<uint8_t> frame_bytes(uint8_t kind,
   return bytes;
 }
 
-std::vector<uint8_t> u64_bytes(uint64_t value) {
-  std::vector<uint8_t> bytes(8);
-  for (int i = 0; i < 8; i++) {
+std::vector<uint8_t> u32_bytes(uint32_t value) {
+  std::vector<uint8_t> bytes(4);
+  for (int i = 0; i < 4; i++) {
     bytes[i] = static_cast<uint8_t>(value >> (8 * i));
   }
+  return bytes;
+}
+
+std::vector<uint8_t> hello_payload(thoom_pid pid,
+                                   uint8_t role = thoom::kRoleGuest) {
+  std::vector<uint8_t> payload = {role};
+  std::vector<uint8_t> id = u32_bytes(pid);
+  payload.insert(payload.end(), id.begin(), id.end());
+  return payload;
+}
+
+std::vector<uint8_t> hello_bytes(thoom_pid pid,
+                                 uint8_t role = thoom::kRoleGuest) {
+  std::vector<uint8_t> bytes = {kVersion, kHelloKind, 0};
+  std::vector<uint8_t> payload = hello_payload(pid, role);
+  bytes.insert(bytes.end(), payload.begin(), payload.end());
   return bytes;
 }
 
@@ -195,6 +212,26 @@ class FakeSwitch : public TestedSwitch {
   std::set<uint64_t> opened;
 };
 
+thoom_pid sent_hello_pid(const FakeSwitch& fake, size_t index = 0) {
+  if (index >= fake.sent.size() || fake.sent[index].bytes.size() < 8) {
+    return THOOM_PID_INVALID;
+  }
+
+  const std::vector<uint8_t>& bytes = fake.sent[index].bytes;
+  thoom_pid pid = 0;
+  for (int i = 0; i < 4; i++) {
+    pid |= static_cast<thoom_pid>(bytes[4 + i]) << (8 * i);
+  }
+
+  return pid;
+}
+
+void feed_welcome(FakeSwitch* guest, thoom_pid pid) {
+  guest->feed(kHostHandle, frame_bytes(kWelcomeKind, u32_bytes(pid)));
+}
+
+thoom_pid other_pid(thoom_pid pid) { return pid == 1 ? 2 : 1; }
+
 void expect_frame(const FakeSwitch& fake, size_t index, uint64_t peer,
                   uint8_t kind, const std::vector<uint8_t>& payload,
                   bool reliable) {
@@ -212,11 +249,15 @@ void expect_reject(const FakeSwitch& fake, size_t index, uint64_t peer,
 
 void expect_welcome(const FakeSwitch& fake, size_t index, uint64_t peer,
                     thoom_pid pid) {
-  expect_frame(fake, index, peer, kWelcomeKind, u64_bytes(pid), true);
+  expect_frame(fake, index, peer, kWelcomeKind, u32_bytes(pid), true);
 }
 
 class SwitchTest : public ::testing::Test {
  protected:
+  void SetUp() override { ASSERT_TRUE(thoom::PeerIdentity::init()); }
+
+  void TearDown() override { thoom::PeerIdentity::quit(); }
+
   FakeSwitch host;
   FakeSwitch guest;
 };
@@ -300,7 +341,7 @@ TEST_F(SwitchTest, CloseFromIdle) {
 TEST_F(SwitchTest, CloseSendsByeAndClosesRoom) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   this->host.sent.clear();
@@ -319,7 +360,7 @@ TEST_F(SwitchTest, CloseSendsByeAndClosesRoom) {
 TEST_F(SwitchTest, CloseIsIdempotent) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   this->host.sent.clear();
@@ -387,7 +428,7 @@ TEST_F(SwitchTest, HostWelcomesGuest) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
 
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
 
   expect_welcome(this->host, 0, kGuestHandle, 1);
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
@@ -398,10 +439,10 @@ TEST_F(SwitchTest, HostWelcomesGuest) {
   expect_consistent(this->host);
 }
 
-TEST_F(SwitchTest, HostAssignsNextPid) {
+TEST_F(SwitchTest, HostKeepsReservationAfterLeave) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
@@ -409,13 +450,21 @@ TEST_F(SwitchTest, HostAssignsNextPid) {
   expect_event(&this->host, TestedSwitch::Event::kLeave, 1,
                TestedSwitch::kReasonTransport);
 
+  // The pid stays reserved for the life of the host identity state, so the
+  // next peer must propose a different one.
   this->host.open(kSecondGuestHandle);
-  this->host.feed(kSecondGuestHandle,
-                  frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kSecondGuestHandle, hello_bytes(1));
+  expect_reject(this->host, 1, kSecondGuestHandle, TestedSwitch::kReasonPid);
+  EXPECT_EQ(this->host.peer_count(), 0u);
+  EXPECT_TRUE(this->host.sent[1].bytes.size() > 0);
 
-  expect_welcome(this->host, 1, kSecondGuestHandle, 2);
+  // The slot is still handshaking, so it can take a new proposal on the same
+  // link without another open.
+  this->host.feed(kSecondGuestHandle, hello_bytes(2));
+  expect_welcome(this->host, 2, kSecondGuestHandle, 2);
   expect_event(&this->host, TestedSwitch::Event::kJoin, 2,
                TestedSwitch::kReasonNone);
+  EXPECT_TRUE(this->host.peer_ready(2));
 }
 
 TEST_F(SwitchTest, HostRejectsVersionMismatch) {
@@ -445,8 +494,9 @@ TEST_F(SwitchTest, HostRejectsMalformedFrames) {
       {"bad flags", frame_bytes(kHelloKind, {thoom::kRoleGuest}, kVersion, 1)},
       {"unknown kind", frame_bytes(99, {})},
       {"empty hello", frame_bytes(kHelloKind, {})},
-      {"hello trailing byte", frame_bytes(kHelloKind, {thoom::kRoleGuest, 0})},
-      {"unexpected welcome", frame_bytes(kWelcomeKind, u64_bytes(1))},
+      {"hello trailing byte",
+       frame_bytes(kHelloKind, {thoom::kRoleGuest, 1, 0, 0, 0, 0})},
+      {"unexpected welcome", frame_bytes(kWelcomeKind, u32_bytes(1))},
       {"unexpected reject", frame_bytes(kRejectKind, {1})},
       {"data before ready", frame_bytes(kDataKind, {1})},
       {"oversized payload", oversized},
@@ -487,7 +537,7 @@ TEST_F(SwitchTest, HostRejectsFullAtSoftCapOne) {
 TEST_F(SwitchTest, HostRejectsSecondGuestWhenFull) {
   ASSERT_TRUE(this->host.host(make_options(2)));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
@@ -506,11 +556,11 @@ TEST_F(SwitchTest, HostRejectsSecondGuestWhenFull) {
 TEST_F(SwitchTest, HostSecondHelloAfterReadyRefused) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
 
   expect_reject(this->host, 1, kGuestHandle, TestedSwitch::kReasonProtocol);
   expect_event(&this->host, TestedSwitch::Event::kLeave, 1,
@@ -527,7 +577,7 @@ TEST_F(SwitchTest, HostAbandonsPeerWhenWelcomeCannotSend) {
   this->host.open(kGuestHandle);
   this->host.fail_send = true;
 
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
 
   expect_no_events(&this->host);
   EXPECT_EQ(this->host.peer_count(), 0u);
@@ -536,6 +586,24 @@ TEST_F(SwitchTest, HostAbandonsPeerWhenWelcomeCannotSend) {
   this->host.poll();
   EXPECT_EQ(this->host.closed.size(), 1u);
   EXPECT_EQ(this->host.closed[0], kGuestHandle);
+}
+
+TEST_F(SwitchTest, HostKeepsPidAfterFailedWelcome) {
+  ASSERT_TRUE(this->host.host(make_options()));
+  this->host.open(kGuestHandle);
+  this->host.fail_send = true;
+  this->host.feed(kGuestHandle, hello_bytes(1));
+  this->host.poll();
+  ASSERT_EQ(this->host.closed.size(), 1u);
+
+  // The welcome never arrived, so the guest never learned the pid, but the id
+  // was consumed and must stay reserved.
+  this->host.fail_send = false;
+  this->host.open(kSecondGuestHandle);
+  this->host.feed(kSecondGuestHandle, hello_bytes(1));
+
+  // Index zero is the welcome that failed to send to the first handle.
+  expect_reject(this->host, 1, kSecondGuestHandle, TestedSwitch::kReasonPid);
 }
 
 TEST_F(SwitchTest, HostHandshakeTimeout) {
@@ -554,7 +622,7 @@ TEST_F(SwitchTest, HostHandshakeTimeout) {
 TEST_F(SwitchTest, HostRejectFlushDelaysClose) {
   ASSERT_TRUE(this->host.host(make_options(2, 10000, 200)));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleHost}));
+  this->host.feed(kGuestHandle, hello_bytes(1, thoom::kRoleHost));
 
   this->host.poll();
   EXPECT_TRUE(this->host.closed.empty());
@@ -582,7 +650,7 @@ TEST_F(SwitchTest, HostByeDuringHandshake) {
 TEST_F(SwitchTest, HostIgnoresUnknownHandles) {
   ASSERT_TRUE(this->host.host(make_options()));
 
-  this->host.feed(kUnknownHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kUnknownHandle, hello_bytes(1));
   this->host.drop(kUnknownHandle, TestedSwitch::kReasonTransport);
 
   EXPECT_TRUE(this->host.sent.empty());
@@ -595,8 +663,11 @@ TEST_F(SwitchTest, GuestOpenSendsHello) {
   this->guest.open(kHostHandle);
 
   ASSERT_EQ(this->guest.sent.size(), 1u);
-  expect_frame(this->guest, 0, kHostHandle, kHelloKind, {thoom::kRoleGuest},
-               true);
+  EXPECT_EQ(this->guest.sent[0].peer, kHostHandle);
+  EXPECT_EQ(this->guest.sent[0].bytes[0], kVersion);
+  EXPECT_EQ(this->guest.sent[0].bytes[1], kHelloKind);
+  EXPECT_EQ(this->guest.sent[0].bytes[3], thoom::kRoleGuest);
+  EXPECT_NE(sent_hello_pid(this->guest), THOOM_PID_INVALID);
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoining);
   EXPECT_EQ(this->guest.peer_count(), 0u);
 }
@@ -617,12 +688,12 @@ TEST_F(SwitchTest, GuestWelcomeJoins) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
 
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
 
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
-  EXPECT_EQ(this->guest.get_local_pid(), 5);
+  EXPECT_EQ(this->guest.get_local_pid(), sent_hello_pid(this->guest));
   EXPECT_EQ(this->guest.peer_count(), 1u);
   EXPECT_EQ(this->guest.peer_pid(0), THOOM_PID_HOST);
   EXPECT_TRUE(this->guest.peer_ready(THOOM_PID_HOST));
@@ -638,7 +709,7 @@ TEST_F(SwitchTest, GuestRejectsInvalidWelcomePid) {
     ASSERT_TRUE(guest.join(make_options(), "ROOM01"));
     guest.open(kHostHandle);
 
-    guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(pid)));
+    guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u32_bytes(pid)));
 
     EXPECT_EQ(guest.get_state(), TestedSwitch::kClosed);
     EXPECT_EQ(guest.get_reason(), TestedSwitch::kReasonProtocol);
@@ -653,6 +724,10 @@ TEST_F(SwitchTest, GuestRejectsInvalidWelcomePid) {
 TEST_F(SwitchTest, GuestKeepsRejectReasons) {
   for (uint8_t code = static_cast<uint8_t>(TestedSwitch::kReasonVersion);
        code <= static_cast<uint8_t>(TestedSwitch::kReasonTransport); code++) {
+    if (code == static_cast<uint8_t>(TestedSwitch::kReasonPid)) {
+      continue;  // a pid collision is retried, not terminal
+    }
+
     SCOPED_TRACE(static_cast<int>(code));
     FakeSwitch guest;
     ASSERT_TRUE(guest.join(make_options(), "ROOM01"));
@@ -671,7 +746,7 @@ TEST_F(SwitchTest, GuestKeepsRejectReasons) {
 }
 
 TEST_F(SwitchTest, GuestMapsUnknownRejectReasonsToProtocol) {
-  const uint8_t codes[] = {0, 7, 255};
+  const uint8_t codes[] = {0, 8, 255};
 
   for (const uint8_t code : codes) {
     SCOPED_TRACE(static_cast<int>(code));
@@ -711,9 +786,9 @@ TEST_F(SwitchTest, GuestRejectsMalformedFrames) {
 
   const std::vector<FrameCase> cases = {
       {"short header", {kVersion}},
-      {"bad flags", frame_bytes(kWelcomeKind, u64_bytes(5), kVersion, 1)},
+      {"bad flags", frame_bytes(kWelcomeKind, u32_bytes(1), kVersion, 1)},
       {"unknown kind", frame_bytes(99, {})},
-      {"unexpected hello", frame_bytes(kHelloKind, {thoom::kRoleGuest})},
+      {"unexpected hello", frame_bytes(kHelloKind, hello_payload(1))},
       {"data before welcome", frame_bytes(kDataKind, {1})},
       {"welcome trailing byte",
        frame_bytes(kWelcomeKind, {1, 0, 0, 0, 0, 0, 0, 0, 0})},
@@ -781,11 +856,11 @@ TEST_F(SwitchTest, GuestHelloSendFailure) {
 TEST_F(SwitchTest, GuestDuplicateWelcome) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
 
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(6)));
+  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u32_bytes(6)));
 
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
   EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
@@ -805,7 +880,7 @@ TEST_F(SwitchTest, GuestHostDropDuringHandshake) {
 TEST_F(SwitchTest, GuestHostDropAfterJoin) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
 
@@ -821,7 +896,7 @@ TEST_F(SwitchTest, GuestHostDropAfterJoin) {
 TEST_F(SwitchTest, GuestHostByeAfterJoin) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
 
@@ -841,7 +916,7 @@ TEST_F(SwitchTest, GuestHostByeAfterJoin) {
 TEST_F(SwitchTest, HostSendsData) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   this->host.sent.clear();
@@ -865,7 +940,7 @@ TEST_F(SwitchTest, HostSendsData) {
 TEST_F(SwitchTest, GuestSendsData) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
   this->guest.sent.clear();
@@ -891,7 +966,7 @@ TEST_F(SwitchTest, SendGuards) {
   this->host.open(kGuestHandle);
   EXPECT_FALSE(this->host.send(datagram));
 
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
@@ -916,7 +991,7 @@ TEST_F(SwitchTest, SendGuards) {
 TEST_F(SwitchTest, HostReceivesData) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
@@ -948,7 +1023,7 @@ TEST_F(SwitchTest, HostReceivesData) {
 TEST_F(SwitchTest, GuestReceivesData) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
 
@@ -964,10 +1039,9 @@ TEST_F(SwitchTest, GuestReceivesData) {
 TEST_F(SwitchTest, HostDataOrderAcrossGuests) {
   ASSERT_TRUE(this->host.host(make_options(3)));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   this->host.open(kSecondGuestHandle);
-  this->host.feed(kSecondGuestHandle,
-                  frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kSecondGuestHandle, hello_bytes(2));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   expect_event(&this->host, TestedSwitch::Event::kJoin, 2,
@@ -993,10 +1067,9 @@ TEST_F(SwitchTest, HostDataOrderAcrossGuests) {
 TEST_F(SwitchTest, HostPeerIteration) {
   ASSERT_TRUE(this->host.host(make_options(3)));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   this->host.open(kSecondGuestHandle);
-  this->host.feed(kSecondGuestHandle,
-                  frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kSecondGuestHandle, hello_bytes(2));
 
   EXPECT_EQ(this->host.peer_count(), 2u);
   EXPECT_EQ(this->host.peer_pid(0), 1);
@@ -1011,7 +1084,7 @@ TEST_F(SwitchTest, HostPeerIteration) {
 TEST_F(SwitchTest, GuestPeerIteration) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
 
   EXPECT_EQ(this->guest.peer_count(), 1u);
   EXPECT_EQ(this->guest.peer_pid(0), THOOM_PID_HOST);
@@ -1034,7 +1107,7 @@ TEST_F(SwitchTest, EmptyQueues) {
 TEST_F(SwitchTest, HostDropReadyGuest) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
@@ -1050,7 +1123,7 @@ TEST_F(SwitchTest, HostDropReadyGuest) {
 TEST_F(SwitchTest, HostByeReadyGuest) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
@@ -1067,10 +1140,9 @@ TEST_F(SwitchTest, HostByeReadyGuest) {
 TEST_F(SwitchTest, CloseTwoGuestsSendsTwoByes) {
   ASSERT_TRUE(this->host.host(make_options(3)));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   this->host.open(kSecondGuestHandle);
-  this->host.feed(kSecondGuestHandle,
-                  frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kSecondGuestHandle, hello_bytes(2));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   expect_event(&this->host, TestedSwitch::Event::kJoin, 2,
@@ -1088,7 +1160,7 @@ TEST_F(SwitchTest, CloseTwoGuestsSendsTwoByes) {
 TEST_F(SwitchTest, GuestCloseSendsBye) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
   this->guest.sent.clear();
@@ -1121,7 +1193,7 @@ TEST_F(SwitchTest, GuestDuplicateOpenKeepsHost) {
   EXPECT_TRUE(this->guest.closed.empty());
   EXPECT_EQ(this->guest.sent.size(), 1u);
 
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
 }
 
@@ -1141,7 +1213,7 @@ TEST_F(SwitchTest, GuestByeDuringHandshake) {
 TEST_F(SwitchTest, GuestRejectAfterJoin) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
 
@@ -1171,9 +1243,9 @@ TEST_F(SwitchTest, HostTableFullClosesExtraHandle) {
 TEST_F(SwitchTest, HostKeepsPidOrderAfterMiddleLeave) {
   ASSERT_TRUE(this->host.host(make_options(4)));
   const uint64_t handles[] = {200, 201, 202};
-  for (const uint64_t handle : handles) {
-    this->host.open(handle);
-    this->host.feed(handle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  for (uint64_t i = 0; i < 3; i++) {
+    this->host.open(handles[i]);
+    this->host.feed(handles[i], hello_bytes(static_cast<thoom_pid>(i + 1)));
   }
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
@@ -1196,7 +1268,7 @@ TEST_F(SwitchTest, HostKeepsPidOrderAfterMiddleLeave) {
 TEST_F(SwitchTest, HostDropRefusedPeerBeforeFlush) {
   ASSERT_TRUE(this->host.host(make_options(2, 10000, 200)));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleHost}));
+  this->host.feed(kGuestHandle, hello_bytes(1, thoom::kRoleHost));
   expect_reject(this->host, 0, kGuestHandle, TestedSwitch::kReasonRole);
 
   this->host.drop(kGuestHandle, TestedSwitch::kReasonTransport);
@@ -1212,7 +1284,7 @@ TEST_F(SwitchTest, HostDropRefusedPeerBeforeFlush) {
 TEST_F(SwitchTest, SendRefusesOversizedPayload) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   this->host.sent.clear();
@@ -1229,10 +1301,9 @@ TEST_F(SwitchTest, SendRefusesOversizedPayload) {
 TEST_F(SwitchTest, HostExpiresMultipleRefusedPeers) {
   ASSERT_TRUE(this->host.host(make_options(3)));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleHost}));
+  this->host.feed(kGuestHandle, hello_bytes(1, thoom::kRoleHost));
   this->host.open(kSecondGuestHandle);
-  this->host.feed(kSecondGuestHandle,
-                  frame_bytes(kHelloKind, {thoom::kRoleHost}));
+  this->host.feed(kSecondGuestHandle, hello_bytes(1, thoom::kRoleHost));
 
   this->host.poll();
 
@@ -1245,11 +1316,11 @@ TEST_F(SwitchTest, HostExpiresMultipleRefusedPeers) {
 TEST_F(SwitchTest, HostRejectsControlWhileReady) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
-  this->host.feed(kGuestHandle, frame_bytes(kWelcomeKind, u64_bytes(2)));
+  this->host.feed(kGuestHandle, frame_bytes(kWelcomeKind, u32_bytes(2)));
 
   expect_reject(this->host, 1, kGuestHandle, TestedSwitch::kReasonProtocol);
   expect_event(&this->host, TestedSwitch::Event::kLeave, 1,
@@ -1259,7 +1330,7 @@ TEST_F(SwitchTest, HostRejectsControlWhileReady) {
 TEST_F(SwitchTest, HostSurvivesUnknownKindFloodAfterJoin) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
@@ -1291,7 +1362,7 @@ TEST_F(SwitchTest, HostRejectsNonGuestRoles) {
     ASSERT_TRUE(host.host(make_options()));
     host.open(kGuestHandle);
 
-    host.feed(kGuestHandle, frame_bytes(kHelloKind, {role}));
+    host.feed(kGuestHandle, hello_bytes(1, role));
 
     expect_reject(host, 0, kGuestHandle, TestedSwitch::kReasonRole);
     expect_no_events(&host);
@@ -1330,7 +1401,7 @@ TEST_F(SwitchTest, GuestCannotReviveClosedSession) {
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
   EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
 
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   this->guest.feed(kHostHandle, frame_bytes(kDataKind, {2}));
   this->guest.feed(kHostHandle, frame_bytes(kByeKind, {}));
 
@@ -1342,25 +1413,6 @@ TEST_F(SwitchTest, GuestCannotReviveClosedSession) {
 
   this->guest.poll();
   EXPECT_EQ(this->guest.close_room_calls, 1);
-}
-
-TEST_F(SwitchTest, GuestAcceptsHugePid) {
-  const thoom_pid huge = THOOM_PID_INVALID - 1;
-
-  ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
-  this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(huge)));
-
-  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
-  EXPECT_EQ(this->guest.get_local_pid(), huge);
-  EXPECT_TRUE(this->guest.peer_ready(THOOM_PID_HOST));
-
-  thoom::Datagram datagram;
-  datagram.peer = THOOM_PID_HOST;
-  datagram.bytes = {1};
-  datagram.reliable = true;
-  ASSERT_TRUE(this->guest.send(datagram));
-  expect_frame(this->guest, 1, kHostHandle, kDataKind, {1}, true);
 }
 
 TEST_F(SwitchTest, HostReusesFreedTableSlot) {
@@ -1387,7 +1439,7 @@ TEST_F(SwitchTest, HostChurnsPeersWithoutAccumulation) {
   for (uint64_t i = 0; i < 100; i++) {
     const uint64_t handle = 600 + i;
     this->host.open(handle);
-    this->host.feed(handle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+    this->host.feed(handle, hello_bytes(static_cast<thoom_pid>(i + 1)));
     expect_event(&this->host, TestedSwitch::Event::kJoin, i + 1,
                  TestedSwitch::kReasonNone);
 
@@ -1437,16 +1489,15 @@ TEST_F(SwitchTest, HostSurvivesTeardownCallbackReentry) {
   ASSERT_TRUE(this->host.host(make_options(3)));
   this->host.close_peer_reenters = true;
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   this->host.open(kSecondGuestHandle);
-  this->host.feed(kSecondGuestHandle,
-                  frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kSecondGuestHandle, hello_bytes(2));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   expect_event(&this->host, TestedSwitch::Event::kJoin, 2,
                TestedSwitch::kReasonNone);
 
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kLeave, 1,
                TestedSwitch::kReasonProtocol);
 
@@ -1463,7 +1514,7 @@ TEST_F(SwitchTest, HostSurvivesTeardownCallbackReentry) {
 TEST_F(SwitchTest, HostAcceptsReusedHandleAfterDrop) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   this->host.drop(kGuestHandle, TestedSwitch::kReasonTransport);
@@ -1471,7 +1522,7 @@ TEST_F(SwitchTest, HostAcceptsReusedHandleAfterDrop) {
                TestedSwitch::kReasonTransport);
 
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(2));
 
   expect_welcome(this->host, 1, kGuestHandle, 2);
   expect_event(&this->host, TestedSwitch::Event::kJoin, 2,
@@ -1482,10 +1533,10 @@ TEST_F(SwitchTest, HostAcceptsReusedHandleAfterDrop) {
 TEST_F(SwitchTest, SendToRefusedPeerIsRefused) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kLeave, 1,
                TestedSwitch::kReasonProtocol);
 
@@ -1501,9 +1552,9 @@ TEST_F(SwitchTest, CloseWithPeersInEveryState) {
   ASSERT_TRUE(this->host.host(make_options(4)));
   this->host.open(800);
   this->host.open(801);
-  this->host.feed(801, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(801, hello_bytes(1));
   this->host.open(802);
-  this->host.feed(802, frame_bytes(kHelloKind, {thoom::kRoleHost}));
+  this->host.feed(802, hello_bytes(1, thoom::kRoleHost));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
   expect_reject(this->host, 1, 802, TestedSwitch::kReasonRole);
@@ -1525,8 +1576,7 @@ TEST_F(SwitchTest, GuestCloseWhileJoiningSendsNoBye) {
   this->guest.close();
 
   EXPECT_EQ(this->guest.sent.size(), 1u);
-  expect_frame(this->guest, 0, kHostHandle, kHelloKind, {thoom::kRoleGuest},
-               true);
+  EXPECT_EQ(this->guest.sent[0].bytes[1], kHelloKind);
   EXPECT_EQ(this->guest.close_room_calls, 1);
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
   EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonClosed);
@@ -1547,11 +1597,11 @@ TEST_F(SwitchTest, GuestOpenAfterCloseClosesHandle) {
 TEST_F(SwitchTest, GuestRejectsHelloAfterJoin) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
 
-  this->guest.feed(kHostHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->guest.feed(kHostHandle, hello_bytes(1));
 
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
   EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
@@ -1561,7 +1611,7 @@ TEST_F(SwitchTest, GuestRejectsHelloAfterJoin) {
 TEST_F(SwitchTest, GuestReceivesMaxPayloadData) {
   ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
   this->guest.open(kHostHandle);
-  this->guest.feed(kHostHandle, frame_bytes(kWelcomeKind, u64_bytes(5)));
+  feed_welcome(&this->guest, sent_hello_pid(this->guest));
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
 
@@ -1591,7 +1641,7 @@ TEST_F(SwitchTest, GuestRejectsRejectWithTrailingByte) {
 TEST_F(SwitchTest, HostSurvivesDataFloodFromReadyPeer) {
   ASSERT_TRUE(this->host.host(make_options()));
   this->host.open(kGuestHandle);
-  this->host.feed(kGuestHandle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(kGuestHandle, hello_bytes(1));
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
 
@@ -1663,9 +1713,9 @@ TEST_F(SwitchTest, HostCloseWithNoPeers) {
 TEST_F(SwitchTest, HostReusesMiddleSlotWithoutShifting) {
   ASSERT_TRUE(this->host.host(make_options(4)));
   const uint64_t handles[] = {900, 901, 902};
-  for (const uint64_t handle : handles) {
-    this->host.open(handle);
-    this->host.feed(handle, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  for (uint64_t i = 0; i < 3; i++) {
+    this->host.open(handles[i]);
+    this->host.feed(handles[i], hello_bytes(static_cast<thoom_pid>(i + 1)));
   }
   expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
                TestedSwitch::kReasonNone);
@@ -1682,7 +1732,7 @@ TEST_F(SwitchTest, HostReusesMiddleSlotWithoutShifting) {
   EXPECT_EQ(this->host.peer_pid(1), 3);
 
   this->host.open(903);
-  this->host.feed(903, frame_bytes(kHelloKind, {thoom::kRoleGuest}));
+  this->host.feed(903, hello_bytes(4));
 
   expect_event(&this->host, TestedSwitch::Event::kJoin, 4,
                TestedSwitch::kReasonNone);
@@ -1691,6 +1741,96 @@ TEST_F(SwitchTest, HostReusesMiddleSlotWithoutShifting) {
   EXPECT_EQ(this->host.peer_pid(1), 4);
   EXPECT_EQ(this->host.peer_pid(2), 3);
   expect_consistent(this->host);
+}
+
+TEST_F(SwitchTest, GuestRetriesPidCollision) {
+  ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
+  this->guest.open(kHostHandle);
+
+  const thoom_pid first = sent_hello_pid(this->guest);
+  ASSERT_NE(first, THOOM_PID_INVALID);
+
+  this->guest.feed(kHostHandle,
+                   frame_bytes(kRejectKind, {TestedSwitch::kReasonPid}));
+  ASSERT_EQ(this->guest.sent.size(), 2u);
+
+  const thoom_pid second = sent_hello_pid(this->guest, 1);
+  ASSERT_NE(second, THOOM_PID_INVALID);
+  EXPECT_NE(second, first);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoining);
+  EXPECT_TRUE(this->guest.closed.empty());
+
+  feed_welcome(&this->guest, second);
+
+  expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
+               TestedSwitch::kReasonNone);
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
+  EXPECT_EQ(this->guest.get_local_pid(), second);
+  expect_consistent(this->guest);
+}
+
+TEST_F(SwitchTest, GuestRetriesInvalidProposal) {
+  ASSERT_TRUE(this->host.host(make_options()));
+  this->host.open(kGuestHandle);
+
+  this->host.feed(kGuestHandle, hello_bytes(THOOM_PID_HOST));
+  expect_reject(this->host, 0, kGuestHandle, TestedSwitch::kReasonPid);
+
+  this->host.feed(kGuestHandle, hello_bytes(THOOM_PID_INVALID));
+  expect_reject(this->host, 1, kGuestHandle, TestedSwitch::kReasonPid);
+
+  this->host.feed(kGuestHandle, hello_bytes(1));
+  expect_welcome(this->host, 2, kGuestHandle, 1);
+  expect_event(&this->host, TestedSwitch::Event::kJoin, 1,
+               TestedSwitch::kReasonNone);
+}
+
+TEST_F(SwitchTest, GuestWelcomeMustMatchProposal) {
+  ASSERT_TRUE(this->guest.join(make_options(), "ROOM01"));
+  this->guest.open(kHostHandle);
+
+  const thoom_pid proposed = sent_hello_pid(this->guest);
+  ASSERT_NE(proposed, THOOM_PID_INVALID);
+
+  feed_welcome(&this->guest, other_pid(proposed));
+
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
+  EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
+  EXPECT_EQ(this->guest.get_local_pid(), THOOM_PID_INVALID);
+  expect_no_events(&this->guest);
+}
+
+TEST_F(SwitchTest, GuestRetriesCollisionWithinDeadline) {
+  ASSERT_TRUE(this->guest.join(make_options(2, 10000), "ROOM01"));
+  this->guest.open(kHostHandle);
+  this->guest.feed(kHostHandle,
+                   frame_bytes(kRejectKind, {TestedSwitch::kReasonPid}));
+
+  this->guest.poll();
+  EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoining);
+  EXPECT_TRUE(this->guest.closed.empty());
+  EXPECT_EQ(this->guest.close_room_calls, 0);
+}
+
+TEST_F(SwitchTest, ReservationOutlivesTheSwitch) {
+  {
+    FakeSwitch host;
+    ASSERT_TRUE(host.host(make_options()));
+    host.open(kGuestHandle);
+    host.feed(kGuestHandle, hello_bytes(1));
+    expect_event(&host, TestedSwitch::Event::kJoin, 1,
+                 TestedSwitch::kReasonNone);
+  }
+
+  FakeSwitch host;
+  ASSERT_TRUE(host.host(make_options()));
+  host.open(kGuestHandle);
+  host.feed(kGuestHandle, hello_bytes(1));
+  expect_reject(host, 0, kGuestHandle, TestedSwitch::kReasonPid);
+
+  host.feed(kGuestHandle, hello_bytes(2));
+  expect_welcome(host, 1, kGuestHandle, 2);
+  expect_event(&host, TestedSwitch::Event::kJoin, 2, TestedSwitch::kReasonNone);
 }
 
 }  // namespace
