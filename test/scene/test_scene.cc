@@ -5,6 +5,7 @@
 #include "SDL3/SDL.h"
 #include "object.h"
 #include "scene/scene.h"
+#include "switch/peer_identity.h"
 #include "thoom/thoom.h"
 
 namespace {
@@ -79,9 +80,11 @@ TEST_F(SceneTest, ReplicatedSpawnTakesGidFromPidAndLid) {
   ASSERT_NE(object, nullptr);
 
   EXPECT_TRUE(object->replicated);
-  EXPECT_EQ(object->owner_pid, thoom::Scene::instance->local_pid);
+  EXPECT_EQ(object->owner_pid,
+            thoom::PeerIdentity::instance->current_pid.load());
   EXPECT_EQ(object->gid,
-            THOOM_GID_COMPOSE(thoom::Scene::instance->local_pid, object->lid));
+            THOOM_GID_COMPOSE(thoom::PeerIdentity::instance->current_pid.load(),
+                              object->lid));
   EXPECT_NE(object->gid, THOOM_GID_INVALID);
   EXPECT_EQ(thoom::Scene::instance->find_gid_object(object->gid), object);
 }
@@ -139,7 +142,7 @@ TEST_F(SceneTest, DuplicateGidIsRefused) {
 }
 
 TEST_F(SceneTest, ReplicatedSpawnNeedsAPid) {
-  thoom::Scene::instance->local_pid = THOOM_PID_INVALID;
+  thoom::PeerIdentity::instance->current_pid.store(THOOM_PID_INVALID);
 
   EXPECT_EQ(this->spawn("test_replicated"), nullptr);
 

@@ -8,7 +8,6 @@
 
 #include "peer/queue.h"
 #include "switch/switch.h"
-#include "thoom/thoom.h"
 
 #define MSG_USE_ITEM '0'
 #define MSG_TOSS_ITEM '1'
@@ -49,9 +48,6 @@ class Peer {
 
   void set_offerer(bool offerer);
 
-  thoom_pid get_pid() const;
-  void set_pid(thoom_pid pid);
-
   uint64_t get_state() const;
   void set_state(uint64_t state);
 
@@ -78,7 +74,6 @@ class Peer {
   void publish_state();
   void store_code(const std::string& code);
 
-  std::atomic<thoom_pid> pid{THOOM_PID_HOST};
   std::atomic<uint64_t> state{kStateNoConnection};
   std::atomic<bool> running{true};
   std::atomic<bool> offerer{false};

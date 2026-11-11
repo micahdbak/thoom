@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <mutex>
 #include <random>
 #include <unordered_set>
@@ -21,6 +22,8 @@ class PeerIdentity {
   bool reserve(thoom_pid pid);
   bool contains(thoom_pid pid) const;
   thoom_pid propose();
+
+  std::atomic<thoom_pid> current_pid{THOOM_PID_HOST};
 
  private:
   mutable std::mutex mutex;

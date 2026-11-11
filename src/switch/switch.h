@@ -73,7 +73,6 @@ class Switch {
   State get_state() const;
   Reason get_reason() const;
   const char* get_token() const;
-  thoom_pid get_local_pid() const;
   uint32_t peer_count() const;
   thoom_pid peer_pid(uint32_t index) const;
   bool peer_ready(thoom_pid pid) const;
@@ -144,7 +143,6 @@ class Switch {
   uint8_t role = kRoleHost;
   bool room_open = false;
   std::string token;
-  thoom_pid local_pid = THOOM_PID_INVALID;
   thoom_pid proposed_pid = THOOM_PID_INVALID;
 
   Peer peers[kSwitchMaxPeers];

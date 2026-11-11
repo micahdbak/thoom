@@ -58,7 +58,6 @@ class Scene {
   uint64_t ticks = 0;
   float delta = 1.0f / 60.0f;  // simulation time
   Map* map = nullptr;
-  thoom_pid local_pid = THOOM_PID_HOST;
 
  private:
   struct MapRequest {

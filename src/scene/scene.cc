@@ -15,6 +15,7 @@
 #include "object.h"
 #include "renderer/renderer.h"
 #include "save/save_data.h"
+#include "switch/peer_identity.h"
 #include "thoom/thoom.h"
 
 #define THOOM_TICK_NS 16666667
@@ -229,6 +230,8 @@ void Scene::step() {
 }
 
 void Scene::tick() {
+  const thoom_pid current_pid = PeerIdentity::instance->current_pid.load();
+
   // 16 and two thirds of a millisecond per tick, to track 60 ticks per second.
   this->ticks += 16;
   this->tick_fraction += 2;
@@ -244,7 +247,7 @@ void Scene::tick() {
   for (std::vector<Object*>& objects : this->object_lists) {
     for (Object* object : objects) {
       if (object->deleted) continue;
-      if (object->replicated && object->owner_pid != this->local_pid) continue;
+      if (object->replicated && object->owner_pid != current_pid) continue;
 
       object->step();
     }
@@ -360,7 +363,9 @@ Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
                   "can be unique";
   }
 
-  if (def.replicated && this->local_pid == THOOM_PID_INVALID) {
+  const thoom_pid current_pid = PeerIdentity::instance->current_pid.load();
+
+  if (def.replicated && current_pid == THOOM_PID_INVALID) {
     LOG(ERROR) << "Scene::spawn_object error: '" << def.id
                << "' needs a pid to take its id from";
     return nullptr;
@@ -371,7 +376,7 @@ Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
   // definition, and the owner starts as the peer that creates it.
   Object::SpawnIdentity previous = Object::spawning_identity;
   Object::spawning_identity.replicated = def.replicated;
-  Object::spawning_identity.pid = this->local_pid;
+  Object::spawning_identity.pid = current_pid;
 
   Object* object = def.create_object(this, options);
 

@@ -79,18 +79,21 @@ void expect_consistent(const TestedSwitch& sw) {
     case TestedSwitch::kIdle:
       EXPECT_EQ(sw.get_reason(), TestedSwitch::kReasonNone);
       EXPECT_EQ(sw.peer_count(), 0u);
-      EXPECT_EQ(sw.get_local_pid(), THOOM_PID_INVALID);
       break;
     case TestedSwitch::kListening:
-      EXPECT_EQ(sw.get_local_pid(), THOOM_PID_HOST);
+      EXPECT_EQ(thoom::PeerIdentity::instance->current_pid.load(),
+                THOOM_PID_HOST);
       break;
     case TestedSwitch::kJoining:
-      EXPECT_EQ(sw.get_local_pid(), THOOM_PID_INVALID);
+      EXPECT_EQ(thoom::PeerIdentity::instance->current_pid.load(),
+                THOOM_PID_INVALID);
       EXPECT_EQ(sw.peer_count(), 0u);
       break;
     case TestedSwitch::kJoined:
-      EXPECT_NE(sw.get_local_pid(), THOOM_PID_HOST);
-      EXPECT_NE(sw.get_local_pid(), THOOM_PID_INVALID);
+      EXPECT_NE(thoom::PeerIdentity::instance->current_pid.load(),
+                THOOM_PID_HOST);
+      EXPECT_NE(thoom::PeerIdentity::instance->current_pid.load(),
+                THOOM_PID_INVALID);
       EXPECT_EQ(sw.peer_count(), 1u);
       EXPECT_EQ(sw.peer_pid(0), THOOM_PID_HOST);
       break;
@@ -267,7 +270,7 @@ TEST_F(SwitchTest, HostStartsListening) {
 
   EXPECT_EQ(this->host.get_state(), TestedSwitch::kListening);
   EXPECT_EQ(this->host.get_reason(), TestedSwitch::kReasonNone);
-  EXPECT_EQ(this->host.get_local_pid(), THOOM_PID_HOST);
+  EXPECT_EQ(thoom::PeerIdentity::instance->current_pid.load(), THOOM_PID_HOST);
   EXPECT_STREQ(this->host.get_token(), "ROOM01");
   EXPECT_EQ(this->host.peer_count(), 0u);
   expect_consistent(this->host);
@@ -297,7 +300,8 @@ TEST_F(SwitchTest, GuestJoins) {
 
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoining);
   EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonNone);
-  EXPECT_EQ(this->guest.get_local_pid(), THOOM_PID_INVALID);
+  EXPECT_EQ(thoom::PeerIdentity::instance->current_pid.load(),
+            THOOM_PID_INVALID);
   EXPECT_STREQ(this->guest.get_token(), "ROOM01");
   EXPECT_EQ(this->guest.entered_token, "ROOM01");
   EXPECT_EQ(this->guest.peer_count(), 0u);
@@ -693,7 +697,8 @@ TEST_F(SwitchTest, GuestWelcomeJoins) {
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
-  EXPECT_EQ(this->guest.get_local_pid(), sent_hello_pid(this->guest));
+  EXPECT_EQ(thoom::PeerIdentity::instance->current_pid.load(),
+            sent_hello_pid(this->guest));
   EXPECT_EQ(this->guest.peer_count(), 1u);
   EXPECT_EQ(this->guest.peer_pid(0), THOOM_PID_HOST);
   EXPECT_TRUE(this->guest.peer_ready(THOOM_PID_HOST));
@@ -1407,7 +1412,8 @@ TEST_F(SwitchTest, GuestCannotReviveClosedSession) {
 
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
   EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
-  EXPECT_EQ(this->guest.get_local_pid(), THOOM_PID_INVALID);
+  EXPECT_EQ(thoom::PeerIdentity::instance->current_pid.load(),
+            THOOM_PID_INVALID);
   expect_no_events(&this->guest);
   expect_no_data(&this->guest);
 
@@ -1765,7 +1771,7 @@ TEST_F(SwitchTest, GuestRetriesPidCollision) {
   expect_event(&this->guest, TestedSwitch::Event::kJoin, THOOM_PID_HOST,
                TestedSwitch::kReasonNone);
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kJoined);
-  EXPECT_EQ(this->guest.get_local_pid(), second);
+  EXPECT_EQ(thoom::PeerIdentity::instance->current_pid.load(), second);
   expect_consistent(this->guest);
 }
 
@@ -1796,7 +1802,8 @@ TEST_F(SwitchTest, GuestWelcomeMustMatchProposal) {
 
   EXPECT_EQ(this->guest.get_state(), TestedSwitch::kClosed);
   EXPECT_EQ(this->guest.get_reason(), TestedSwitch::kReasonProtocol);
-  EXPECT_EQ(this->guest.get_local_pid(), THOOM_PID_INVALID);
+  EXPECT_EQ(thoom::PeerIdentity::instance->current_pid.load(),
+            THOOM_PID_INVALID);
   expect_no_events(&this->guest);
 }
 

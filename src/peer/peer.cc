@@ -13,8 +13,6 @@
 #include "thoom/thoom.h"
 #include "webrtc/webrtc_switch.h"
 
-#define PEER_GUEST_PID ((thoom_pid)1)
-
 #define PEER_POLL_MS 1
 
 namespace thoom {
@@ -57,13 +55,8 @@ Peer::~Peer() {
 
 void Peer::set_offerer(bool offerer) {
   this->offerer.store(offerer);
-  this->set_pid(offerer ? PEER_GUEST_PID : THOOM_PID_HOST);
   this->commands.push(Command{Command::kRestart, std::string()});
 }
-
-thoom_pid Peer::get_pid() const { return this->pid.load(); }
-
-void Peer::set_pid(thoom_pid pid) { this->pid.store(pid); }
 
 uint64_t Peer::get_state() const { return this->state.load(); }
 
@@ -135,11 +128,6 @@ void Peer::begin_session() {
 
 void Peer::poll_switch() {
   this->net->poll();
-
-  const thoom_pid local = this->net->get_local_pid();
-  if (local != THOOM_PID_INVALID) {
-    this->set_pid(local);
-  }
 
   if (this->net->peer_count() > 0) {
     const thoom_pid remote = this->net->peer_pid(0);

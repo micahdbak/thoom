@@ -28,7 +28,7 @@ bool Switch::host(const Options& options) {
 
   this->options = options;
   this->role = kRoleHost;
-  this->local_pid = THOOM_PID_HOST;
+  PeerIdentity::instance->current_pid.store(THOOM_PID_HOST);
 
   if (!this->open_room(&this->token) || this->token.empty()) {
     this->state = kClosed;
@@ -50,6 +50,7 @@ bool Switch::join(const Options& options, const char* code) {
   this->role = kRoleGuest;
   this->token = code;
   this->proposed_pid = PeerIdentity::instance->propose();
+  PeerIdentity::instance->current_pid.store(THOOM_PID_INVALID);
 
   if (!this->enter_room(this->token)) {
     this->state = kClosed;
@@ -88,6 +89,8 @@ void Switch::close() {
     if (this->reason == kReasonNone) {
       this->reason = kReasonClosed;
     }
+
+    PeerIdentity::instance->current_pid.store(THOOM_PID_INVALID);
   }
 
   this->shutdown();
@@ -133,8 +136,6 @@ Switch::State Switch::get_state() const { return this->state; }
 Switch::Reason Switch::get_reason() const { return this->reason; }
 
 const char* Switch::get_token() const { return this->token.c_str(); }
-
-thoom_pid Switch::get_local_pid() const { return this->local_pid; }
 
 uint32_t Switch::peer_count() const { return this->ready_count(); }
 
@@ -296,6 +297,7 @@ void Switch::finish(Reason reason) {
 
   this->state = kClosed;
   this->reason = reason;
+  PeerIdentity::instance->current_pid.store(THOOM_PID_INVALID);
 }
 
 void Switch::refuse(Peer* peer, Reason reason) {
@@ -427,7 +429,7 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
     return;
   }
 
-  this->local_pid = pid;
+  PeerIdentity::instance->current_pid.store(pid);
   peer->pid = THOOM_PID_HOST;
   peer->state = kPeerReady;
   this->state = kJoined;
