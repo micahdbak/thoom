@@ -1,9 +1,5 @@
 #include "switch/peer_identity.h"
 
-#include <cstdint>
-#include <mutex>
-#include <random>
-
 #include "absl/log/log.h"
 #include "thoom/thoom.h"
 
@@ -28,22 +24,17 @@ void PeerIdentity::quit() {
   PeerIdentity::instance = nullptr;
 }
 
-PeerIdentity::PeerIdentity() : random(std::random_device{}()) {
-  this->reserved.insert(THOOM_PID_HOST);
-}
+PeerIdentity::PeerIdentity() = default;
 
-bool PeerIdentity::reserve(thoom_pid pid) {
-  if (pid == THOOM_PID_INVALID) {
-    return false;
+thoom_pid PeerIdentity::issue() {
+  const thoom_pid pid = this->next_pid.fetch_add(1);
+
+  // Host zero is never issued, and the invalid sentinel must stay unreachable.
+  if (pid == THOOM_PID_HOST || pid == THOOM_PID_INVALID) {
+    return THOOM_PID_INVALID;
   }
 
-  std::lock_guard<std::mutex> guard(this->mutex);
-  return this->reserved.insert(pid).second;
-}
-
-bool PeerIdentity::contains(thoom_pid pid) const {
-  std::lock_guard<std::mutex> guard(this->mutex);
-  return this->reserved.find(pid) != this->reserved.end();
+  return pid;
 }
 
 thoom_pid PeerIdentity::get_current() const { return this->current_pid.load(); }
@@ -57,13 +48,6 @@ void PeerIdentity::set_current(thoom_pid new_pid) {
   }
 
   LOG(INFO) << "PeerIdentity: current pid set to " << new_pid;
-}
-
-thoom_pid PeerIdentity::propose() {
-  std::lock_guard<std::mutex> guard(this->mutex);
-
-  std::uniform_int_distribution<uint32_t> pick(1, THOOM_PID_INVALID - 1);
-  return pick(this->random);
 }
 
 };  // namespace thoom

@@ -23,8 +23,6 @@ static const char* reason_name(Switch::Reason reason) {
       return "version";
     case Switch::kReasonRole:
       return "role";
-    case Switch::kReasonPid:
-      return "pid";
     case Switch::kReasonFull:
       return "full";
     case Switch::kReasonProtocol:
@@ -76,7 +74,6 @@ bool Switch::join(const Options& options, const char* code) {
   this->options = options;
   this->role = kRoleGuest;
   this->token = code;
-  this->proposed_pid = PeerIdentity::instance->propose();
   PeerIdentity::instance->set_current(THOOM_PID_INVALID);
 
   if (!this->enter_room(this->token)) {
@@ -88,8 +85,7 @@ bool Switch::join(const Options& options, const char* code) {
 
   this->room_open = true;
   this->state = kJoining;
-  LOG(INFO) << "Switch: joining " << this->token << " as pid "
-            << this->proposed_pid;
+  LOG(INFO) << "Switch: joining " << this->token;
   return true;
 }
 
@@ -402,7 +398,6 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
 
   ByteReader reader(frame.payload, frame.size);
   const uint8_t hello_role = reader.read_u8();
-  const thoom_pid proposed = reader.read_u32();
   if (!reader.ok() || reader.remaining() != 0) {
     this->refuse(peer, kReasonProtocol);
     return;
@@ -418,41 +413,32 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
     return;
   }
 
-  // A collision is retryable, so the slot stays handshaking and keeps its
-  // original deadline. The guest proposes another id on the same link.
-  if (!PeerIdentity::instance->reserve(proposed)) {
-    LOG(INFO) << "Switch: pid " << proposed << " is taken, asking for another";
-    this->reject_pid(peer);
+  const thoom_pid pid = PeerIdentity::instance->issue();
+  if (pid == THOOM_PID_INVALID) {
+    LOG(ERROR) << "Switch: no pid remains to admit a guest";
+    this->refuse(peer, kReasonFull);
     return;
   }
 
   ByteWriter writer;
-  writer.write_u32(proposed);
+  writer.write_u32(pid);
   if (!this->send_frame(peer, kFrameWelcome, writer.bytes().data(),
                         static_cast<uint32_t>(writer.bytes().size()), true)) {
     this->abandon(peer);
     return;
   }
 
-  peer->pid = proposed;
+  peer->pid = pid;
   peer->state = kPeerReady;
-  LOG(INFO) << "Switch: admitted guest " << proposed;
-  this->push_event(Event::kJoin, proposed, kReasonNone);
+  LOG(INFO) << "Switch: admitted guest " << pid;
+  this->push_event(Event::kJoin, pid, kReasonNone);
 }
 
 bool Switch::send_hello(Peer* peer) {
   ByteWriter writer;
   writer.write_u8(kRoleGuest);
-  writer.write_u32(this->proposed_pid);
   return this->send_frame(peer, kFrameHello, writer.bytes().data(),
                           static_cast<uint32_t>(writer.bytes().size()), true);
-}
-
-void Switch::reject_pid(Peer* peer) {
-  ByteWriter writer;
-  writer.write_u8(static_cast<uint8_t>(kReasonPid));
-  this->send_frame(peer, kFrameReject, writer.bytes().data(),
-                   static_cast<uint32_t>(writer.bytes().size()), true);
 }
 
 void Switch::handle_welcome(Peer* peer, const Frame& frame) {
@@ -468,10 +454,8 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
     return;
   }
 
-  if (pid == THOOM_PID_HOST || pid == THOOM_PID_INVALID ||
-      pid != this->proposed_pid) {
-    LOG(WARNING) << "Switch: welcome pid " << pid << " does not match proposal "
-                 << this->proposed_pid;
+  if (pid == THOOM_PID_HOST || pid == THOOM_PID_INVALID) {
+    LOG(WARNING) << "Switch: welcome carried an unusable pid " << pid;
     this->finish(kReasonProtocol);
     return;
   }
@@ -500,19 +484,6 @@ void Switch::handle_reject(Peer* peer, const Frame& frame) {
   Reason reason = static_cast<Reason>(code);
   if (reason < kReasonVersion || reason > kReasonTransport) {
     reason = kReasonProtocol;
-  }
-
-  // A reserved pid only rejects this proposal, not the peer: retry on the same
-  // link so the guest keeps its one handshake deadline.
-  if (reason == kReasonPid && peer->state == kPeerHandshaking) {
-    LOG(INFO) << "Switch: pid " << this->proposed_pid << " was taken";
-    this->proposed_pid = PeerIdentity::instance->propose();
-
-    if (!this->send_hello(peer)) {
-      this->finish(kReasonTransport);
-    }
-
-    return;
   }
 
   LOG(INFO) << "Switch: join rejected: " << reason_name(reason);
