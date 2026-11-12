@@ -14,7 +14,7 @@
 #include "map/map_collider.h"
 #include "map/map_layer.h"
 #include "map/tilesheet.h"
-#include "object.h"
+#include "object/object.h"
 #include "thoom/macros.h"
 
 namespace thoom {
