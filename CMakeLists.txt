@@ -55,6 +55,7 @@ set(THOOM_ENGINE_LIBS
   thoom_hud
   thoom_input
   thoom_map
+  thoom_object
   thoom_peer
   thoom_renderer
   thoom_save

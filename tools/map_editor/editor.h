@@ -8,8 +8,7 @@
 #include "editor_ui.h"
 #include "map/map.h"
 #include "map/map_layer.h"
-#include "object.h"
-#include "scene/scene.h"
+#include "object/object.h"
 
 class Editor : public thoom::Object {
  public:
@@ -19,8 +18,7 @@ class Editor : public thoom::Object {
   void step() override;
   void render() override;
 
-  static thoom::Object* create_object(thoom::Scene* scene,
-                                      const std::string& options);
+  static thoom::Object* create_object(const std::string& options);
 
  private:
   thoom::MapLayer* map_layer() const;

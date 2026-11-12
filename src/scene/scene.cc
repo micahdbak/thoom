@@ -2,9 +2,13 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/log/log.h"
@@ -12,7 +16,8 @@
 #include "colour.h"
 #include "hud/hud.h"
 #include "map/map.h"
-#include "object.h"
+#include "object/entity.h"
+#include "object/object.h"
 #include "renderer/renderer.h"
 #include "save/save_data.h"
 #include "switch/peer_identity.h"
@@ -24,14 +29,13 @@
 namespace thoom {
 
 bool Scene::init(const std::string& initial_map, bool create_objects) {
-  if (Scene::instance != nullptr) {
-    LOG(ERROR) << "Scene::init error: scene already initialized";
-    return false;
+  if (Scene::instance == nullptr) {
+    new Scene(initial_map, create_objects);
+    return true;
   }
 
-  // Scene::Scene sets Scene::instance internally
-  new Scene(initial_map, create_objects);
-  return true;
+  LOG(ERROR) << "Scene::init error: scene already initialized";
+  return false;
 }
 
 void Scene::quit() {
@@ -75,17 +79,18 @@ Scene::~Scene() {
 }
 
 void Scene::register_object(const ObjectDef& def) {
-  if (def.id == nullptr) {
-    LOG(ERROR) << "Scene::register_object error: definition has no id";
+  if (def.id == nullptr || def.create_object == nullptr) {
+    LOG(ERROR) << "Scene::register_object error: incomplete definition";
     return;
   }
 
-  if (this->factories.find(def.id) != this->factories.end()) {
+  if (this->find_object_definition(def.id) != nullptr ||
+      this->find_entity_definition(def.id) != nullptr) {
     LOG(FATAL) << "Scene::register_object error: '" << def.id
                << "' already exists";
   }
 
-  this->factories[def.id] = def;
+  this->object_factories.emplace(def.id, def);
 }
 
 void Scene::register_objects(const ObjectDef* defs) {
@@ -99,71 +104,60 @@ void Scene::register_objects(const ObjectDef* defs) {
   }
 }
 
+void Scene::register_entity(const EntityDef& def) {
+  if (def.id == nullptr || def.create_entity == nullptr) {
+    LOG(ERROR) << "Scene::register_entity error: incomplete definition";
+    return;
+  }
+
+  if (this->find_object_definition(def.id) != nullptr ||
+      this->find_entity_definition(def.id) != nullptr) {
+    LOG(FATAL) << "Scene::register_entity error: '" << def.id
+               << "' already exists";
+  }
+
+  this->entity_factories.emplace(def.id, def);
+}
+
+void Scene::register_entities(const EntityDef* defs) {
+  if (defs == nullptr) {
+    LOG(ERROR) << "Scene::register_entities error: no definition table";
+    return;
+  }
+
+  for (const EntityDef* def = defs; def->id != nullptr; def++) {
+    this->register_entity(*def);
+  }
+}
+
 void Scene::request_map(const std::string& path, bool create_objects) {
   this->next_map.path = path;
   this->next_map.create_objects = create_objects;
 }
 
 void Scene::create_object(const std::string& id, const std::string& options) {
-  if (this->state == Scene::kUnloading) {
-    LOG(WARNING) << "Scene::create_object: '" << id
-                 << "' dropped while the scene unloads";
+  if (this->find_entity_definition(id) != nullptr) {
+    LOG(ERROR) << "Scene::create_object error: '" << id
+               << "' is an entity; use create_entity";
     return;
   }
 
-  if (this->state == Scene::kRunning || this->state == Scene::kLoading) {
-    ObjectRequest request;
-    request.id = id;
-    request.options = options;
-    this->new_objects.push(request);
-    return;
-  }
-
-  std::unordered_map<std::string, ObjectDef>::iterator it =
-      this->factories.find(id);
-
-  if (it == this->factories.end()) {
-    LOG(ERROR) << "Scene::create_object error: '" << id << "' does not exist";
-    return;
-  }
-
-  this->spawn_object(it->second, options);
+  this->request_creation(ObjectRequest{id, options});
 }
 
-bool Scene::register_gid_object(Object* object) {
-  if (object == nullptr) {
-    return false;
-  }
-
-  if (!object->replicated) {
-    if (object->gid != THOOM_GID_INVALID ||
-        object->owner_pid != THOOM_PID_INVALID) {
-      LOG(FATAL) << "Scene::register_gid_object error: local object has "
-                    "network identity";
-    }
-
-    return true;
-  }
-
-  if (object->gid == THOOM_GID_INVALID) {
-    LOG(FATAL)
-        << "Scene::register_gid_object error: replicated object has no gid";
-  }
-
-  if (object->owner_pid == THOOM_PID_INVALID) {
-    LOG(FATAL)
-        << "Scene::register_gid_object error: replicated object has no owner";
-  }
-
-  return this->objects_by_gid.emplace(object->gid, object).second;
-}
-
-void Scene::unregister_gid_object(Object* object) {
-  if (object == nullptr || object->gid == THOOM_GID_INVALID) {
+void Scene::create_entity(const std::string& id, const std::string& options,
+                          const EntityOptions& entity_options) {
+  if (this->find_object_definition(id) != nullptr) {
+    LOG(ERROR) << "Scene::create_entity error: '" << id
+               << "' is an object; use create_object";
     return;
   }
 
-  this->objects_by_gid.erase(object->gid);
+  this->request_creation(EntityRequest{id, options, entity_options});
+}
+
+void Scene::replicate_entity(const EntityRecord& record) {
+  this->request_creation(record);
 }
 
 Object* Scene::find_object(thoom_lid lid) {
@@ -177,11 +171,11 @@ Object* Scene::find_object(thoom_lid lid) {
   return it->second;
 }
 
-Object* Scene::find_gid_object(thoom_gid gid) {
-  std::unordered_map<thoom_gid, Object*>::iterator it =
-      this->objects_by_gid.find(gid);
+Entity* Scene::find_entity(thoom_gid gid) {
+  std::unordered_map<thoom_gid, Entity*>::iterator it =
+      this->entities_by_gid.find(gid);
 
-  if (it == this->objects_by_gid.end() || it->second->deleted) {
+  if (it == this->entities_by_gid.end() || it->second->deleted) {
     return nullptr;
   }
 
@@ -190,20 +184,18 @@ Object* Scene::find_gid_object(thoom_gid gid) {
 
 void Scene::save_objects() {
   for (std::vector<Object*>& objects : this->object_lists) {
-    for (Object* object : objects) object->save_data();
+    for (Object* object : objects) {
+      Scene::save_tree(*object);
+    }
   }
 }
 
 void Scene::step() {
   if (!this->next_map.path.empty()) {
-    std::string path = this->next_map.path;
-    bool create_objects = this->next_map.create_objects;
-
-    this->next_map.path.clear();
-    this->next_map.create_objects = true;
+    MapRequest request = std::exchange(this->next_map, {});
 
     this->unload();
-    this->load_map(path, create_objects);
+    this->load_map(request.path, request.create_objects);
 
     this->state = Scene::kRunning;
     this->tick();
@@ -243,29 +235,42 @@ void Scene::tick() {
 
   Renderer::instance->sprites.clear();
 
-  // step all objects which should be simulated locally
+  this->step_local_trees(current_pid);
+  this->create_requested_objects();
+  this->render_trees();
+  this->destroy_deleted_trees();
+}
+
+void Scene::step_local_trees(thoom_pid current_pid) {
   for (std::vector<Object*>& objects : this->object_lists) {
     for (Object* object : objects) {
-      if (object->deleted) continue;
-      if (object->replicated && object->owner_pid != current_pid) continue;
+      Entity* entity = dynamic_cast<Entity*>(object);
+      if (entity != nullptr && entity->owner_pid != current_pid) {
+        continue;
+      }
 
-      object->step();
+      Scene::step_tree(*object);
     }
   }
+}
 
-  this->create_new_objects();
-
-  // render all objects (even non-owned ones)
+void Scene::render_trees() {
   for (std::vector<Object*>& objects : this->object_lists) {
     for (Object* object : objects) {
-      if (!object->deleted) object->render();
+      Scene::render_tree(*object);
     }
   }
+}
 
-  // destroy any objects that were marked for deletion
+void Scene::destroy_deleted_trees() {
   for (std::vector<Object*>& objects : this->object_lists) {
+    for (Object* object : objects) {
+      if (!object->deleted) {
+        Scene::destroy_deleted_children(*object);
+      }
+    }
+
     std::vector<Object*>::iterator it = objects.begin();
-
     while (it != objects.end()) {
       if (!(*it)->deleted) {
         it++;
@@ -280,7 +285,12 @@ void Scene::tick() {
 
 void Scene::destroy_object(Object* object) {
   this->objects_by_lid.erase(object->lid);
-  this->unregister_gid_object(object);
+
+  Entity* entity = dynamic_cast<Entity*>(object);
+  if (entity != nullptr) {
+    this->entities_by_gid.erase(entity->gid);
+  }
+
   delete object;
 }
 
@@ -294,12 +304,12 @@ void Scene::load_map(const std::string& path, bool create_objects) {
   Renderer::instance->reset_view();
 
   if (create_objects) {
-    for (const ObjectRequest& object : this->map->objects) {
-      this->create_object(object.id, object.options);
+    for (const ObjectRequest& request : this->map->objects) {
+      this->create_map_object(request);
     }
   }
 
-  this->create_new_objects();
+  this->create_requested_objects();
 
   this->state = Scene::kIdle;
 
@@ -322,7 +332,7 @@ void Scene::unload() {
 
   this->state = Scene::kUnloading;
 
-  while (!this->new_objects.empty()) this->new_objects.pop();
+  while (!this->creation_requests.empty()) this->creation_requests.pop();
 
   // Normal objects belong to the map. Objects in the first and last lists
   // outlive it, so a map change does not remove session objects.
@@ -338,72 +348,270 @@ void Scene::unload() {
   this->state = Scene::kIdle;
 }
 
-void Scene::create_new_objects() {
-  while (!this->new_objects.empty()) {
-    ObjectRequest request = this->new_objects.front();
-    this->new_objects.pop();
+const ObjectDef* Scene::find_object_definition(const std::string& id) const {
+  std::unordered_map<std::string, ObjectDef>::const_iterator it =
+      this->object_factories.find(id);
+  return it == this->object_factories.end() ? nullptr : &it->second;
+}
 
-    std::unordered_map<std::string, ObjectDef>::iterator it =
-        this->factories.find(request.id);
+const EntityDef* Scene::find_entity_definition(const std::string& id) const {
+  std::unordered_map<std::string, EntityDef>::const_iterator it =
+      this->entity_factories.find(id);
+  return it == this->entity_factories.end() ? nullptr : &it->second;
+}
 
-    if (it == this->factories.end()) {
-      LOG(ERROR) << "Scene::create_new_objects error: '" << request.id
-                 << "' does not exist";
-      continue;
-    }
+void Scene::create_map_object(const ObjectRequest& request) {
+  if (this->find_object_definition(request.id) != nullptr) {
+    this->create_object(request.id, request.options);
+    return;
+  }
 
-    this->spawn_object(it->second, request.options);
+  if (this->find_entity_definition(request.id) != nullptr) {
+    const EntityDef* def = this->find_entity_definition(request.id);
+    this->create_entity(request.id, request.options, def->defaults);
+    return;
+  }
+
+  LOG(ERROR) << "Scene::create_map_object error: '" << request.id
+             << "' does not exist";
+}
+
+void Scene::request_creation(CreationRequest request) {
+  if (this->state == Scene::kUnloading) {
+    LOG(WARNING) << "Scene: creation request dropped while the scene unloads";
+    return;
+  }
+
+  this->creation_requests.push(std::move(request));
+
+  if (this->state == Scene::kIdle && !this->draining_creations) {
+    this->create_requested_objects();
   }
 }
 
-Object* Scene::spawn_object(const ObjectDef& def, const std::string& options) {
-  // The lid is issued once per process, so exhausting it would reuse a gid.
-  if (Object::next_lid == THOOM_LID_MAX) {
-    LOG(FATAL) << "Scene::spawn_object error: no lids remain, so no new id "
-                  "can be unique";
+void Scene::process_object_request(const ObjectRequest& request) {
+  const ObjectDef* def = this->find_object_definition(request.id);
+  if (def == nullptr) {
+    LOG(ERROR) << "Scene::create_object error: '" << request.id
+               << "' does not exist";
+    return;
+  }
+
+  this->instantiate_object(*def, request.options);
+}
+
+void Scene::process_entity_request(const EntityRequest& request) {
+  const EntityDef* def = this->find_entity_definition(request.id);
+  if (def == nullptr) {
+    LOG(ERROR) << "Scene::create_entity error: '" << request.id
+               << "' does not exist";
+    return;
   }
 
   const thoom_pid current_pid = PeerIdentity::instance->get_current();
-
-  if (def.replicated && current_pid == THOOM_PID_INVALID) {
-    LOG(ERROR) << "Scene::spawn_object error: '" << def.id
+  if (current_pid == THOOM_PID_INVALID) {
+    LOG(ERROR) << "Scene::create_entity error: '" << request.id
                << "' needs a pid to take its id from";
-    return nullptr;
+    return;
   }
 
-  // Objects take their identity in the constructor, so constructors can
-  // already reference their own object. Replication is decided by the
-  // definition, and the owner starts as the peer that creates it.
-  Object::SpawnIdentity previous = Object::spawning_identity;
-  Object::spawning_identity.replicated = def.replicated;
-  Object::spawning_identity.pid = current_pid;
+  if (request.policy.ownership != Entity::Ownership::kFixed &&
+      request.policy.ownership != Entity::Ownership::kRoundRobin) {
+    LOG(ERROR) << "Scene::create_entity error: invalid ownership";
+    return;
+  }
 
-  Object* object = def.create_object(this, options);
+  if (request.policy.ownership == Entity::Ownership::kRoundRobin &&
+      request.policy.owner_pid != THOOM_PID_INVALID) {
+    LOG(ERROR) << "Scene::create_entity error: a round-robin entity cannot "
+                  "request a fixed pid";
+    return;
+  }
 
-  Object::spawning_identity = previous;
+  thoom_pid owner_pid = request.policy.owner_pid;
+  if (request.policy.ownership == Entity::Ownership::kRoundRobin ||
+      owner_pid == THOOM_PID_INVALID) {
+    owner_pid = current_pid;
+  }
 
+  Entity::Context context = {current_pid, std::nullopt, owner_pid,
+                             request.policy.ownership};
+  this->instantiate_entity(*def, context, request.options);
+}
+
+void Scene::process_entity_record(const EntityRecord& record) {
+  const EntityDef* def = this->find_entity_definition(record.id);
+  if (def == nullptr) {
+    LOG(ERROR) << "Scene::replicate_entity error: '" << record.id
+               << "' does not exist";
+    return;
+  }
+
+  if (record.gid == THOOM_GID_INVALID ||
+      THOOM_GID_PID(record.gid) == THOOM_PID_INVALID ||
+      record.owner_pid == THOOM_PID_INVALID ||
+      (record.ownership != Entity::Ownership::kFixed &&
+       record.ownership != Entity::Ownership::kRoundRobin)) {
+    LOG(ERROR) << "Scene::replicate_entity error: invalid identity";
+    return;
+  }
+
+  if (this->entities_by_gid.find(record.gid) != this->entities_by_gid.end()) {
+    LOG(ERROR) << "Scene::replicate_entity error: repeated gid " << record.gid;
+    return;
+  }
+
+  Entity::Context context = {THOOM_GID_PID(record.gid), record.gid,
+                             record.owner_pid, record.ownership};
+  this->instantiate_entity(*def, context, record.options);
+}
+
+void Scene::create_requested_objects() {
+  if (this->draining_creations) {
+    return;
+  }
+
+  this->draining_creations = true;
+
+  // The queue's deque keeps references valid when factories append requests.
+  while (!this->creation_requests.empty()) {
+    const CreationRequest& request = this->creation_requests.front();
+
+    if (const ObjectRequest* object = std::get_if<ObjectRequest>(&request)) {
+      this->process_object_request(*object);
+    } else if (const EntityRequest* entity =
+                   std::get_if<EntityRequest>(&request)) {
+      this->process_entity_request(*entity);
+    } else {
+      this->process_entity_record(std::get<EntityRecord>(request));
+    }
+
+    this->creation_requests.pop();
+  }
+
+  this->draining_creations = false;
+}
+
+void Scene::instantiate_object(const ObjectDef& def,
+                               const std::string& options) {
+  Object* object = def.create_object(options);
   if (object == nullptr) {
-    LOG(ERROR) << "Scene::spawn_object error: '" << def.id
+    LOG(ERROR) << "Scene::create_object error: '" << def.id
                << "' factory returned null";
-    return nullptr;
+    return;
+  }
+
+  if (dynamic_cast<Entity*>(object) != nullptr) {
+    LOG(ERROR) << "Scene::create_object error: '" << def.id
+               << "' factory did not return a local root";
+    delete object;
+    return;
+  }
+
+  this->admit_root(object, def.order);
+}
+
+void Scene::instantiate_entity(const EntityDef& def,
+                               const Entity::Context& context,
+                               const std::string& options) {
+  Entity* entity = def.create_entity(context, options);
+  if (entity == nullptr) {
+    LOG(ERROR) << "Scene::create_entity error: '" << def.id
+               << "' factory returned null";
+    return;
+  }
+
+  this->admit_root(entity, def.order);
+}
+
+bool Scene::admit_root(Object* object, ObjectOrder order) {
+  if (object == nullptr) {
+    return false;
+  }
+
+  if (object->get_parent() != nullptr) {
+    LOG(ERROR) << "Scene: a root cannot have a parent";
+    delete object;
+    return false;
   }
 
   if (object->deleted) {
     delete object;
-    return nullptr;
+    return false;
   }
 
-  if (!this->register_gid_object(object)) {
-    LOG(ERROR) << "Scene::spawn_object error: '" << def.id << "' repeated gid "
-               << object->gid;
-    delete object;
-    return nullptr;
+  if (this->objects_by_lid.find(object->lid) != this->objects_by_lid.end()) {
+    LOG(FATAL) << "Scene: repeated lid " << object->lid;
   }
 
-  this->object_lists[def.order].push_back(object);
-  this->objects_by_lid[object->lid] = object;
+  Entity* entity = dynamic_cast<Entity*>(object);
+  if (entity != nullptr &&
+      !this->entities_by_gid.emplace(entity->gid, entity).second) {
+    LOG(ERROR) << "Scene: repeated gid " << entity->gid;
+    delete entity;
+    return false;
+  }
 
-  return object;
+  this->objects_by_lid.emplace(object->lid, object);
+  this->object_lists[order].push_back(object);
+  return true;
+}
+
+// Index-based traversal tolerates children appended during callbacks.
+void Scene::step_tree(Object& object) {
+  if (object.deleted) {
+    return;
+  }
+
+  const size_t child_count = object.get_children().size();
+  object.step();
+  if (object.deleted) {
+    return;
+  }
+
+  for (size_t i = 0; i < child_count && !object.deleted; i++) {
+    Scene::step_tree(*object.get_children()[i]);
+  }
+}
+
+void Scene::render_tree(Object& object) {
+  if (object.deleted) {
+    return;
+  }
+
+  const size_t child_count = object.get_children().size();
+  object.render();
+  if (object.deleted) {
+    return;
+  }
+
+  for (size_t i = 0; i < child_count && !object.deleted; i++) {
+    Scene::render_tree(*object.get_children()[i]);
+  }
+}
+
+void Scene::save_tree(Object& object) {
+  const size_t child_count = object.get_children().size();
+  object.save_data();
+
+  for (size_t i = 0; i < child_count; i++) {
+    Scene::save_tree(*object.get_children()[i]);
+  }
+}
+
+void Scene::destroy_deleted_children(Object& object) {
+  size_t i = 0;
+  while (i < object.get_children().size()) {
+    Object* child = object.get_children()[i];
+    if (child->deleted) {
+      // Deletion detaches the child, so the next child keeps this index.
+      delete child;
+      continue;
+    }
+
+    Scene::destroy_deleted_children(*child);
+    i++;
+  }
 }
 
 };  // namespace thoom

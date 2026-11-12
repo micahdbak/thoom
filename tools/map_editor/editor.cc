@@ -18,10 +18,9 @@
 #include "map/map_collider.h"
 #include "map/map_layer.h"
 #include "map/tilesheet.h"
-#include "object.h"
+#include "object/object.h"
 #include "renderer/font.h"
 #include "renderer/renderer.h"
-#include "scene/scene.h"
 #include "texture/texture.h"
 #include "thoom/macros.h"
 #include "window/window.h"
@@ -38,7 +37,7 @@ static void parse_billboard_options(const std::string& options, int* x, int* y,
   tilesheet = buff;
 }
 
-Editor::Editor(const std::vector<std::string>& args) {
+Editor::Editor(const std::vector<std::string>& args) : thoom::Object(nullptr) {
   this->map_path = args[0];
 
   std::string bin_path = args[0] + ".bin";
@@ -193,8 +192,7 @@ void Editor::render() {
                                          &this->viewport, &this->world_rect, 0);
 }
 
-thoom::Object* Editor::create_object(thoom::Scene* scene,
-                                     const std::string& options) {
+thoom::Object* Editor::create_object(const std::string& options) {
   std::vector<std::string> args;
   std::string arg;
 

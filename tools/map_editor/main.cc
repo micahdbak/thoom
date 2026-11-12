@@ -13,7 +13,7 @@
 #include "hud/hud.h"
 #include "input/input.h"
 #include "map/map.h"
-#include "object.h"
+#include "object/object.h"
 #include "renderer/renderer.h"
 #include "scene/scene.h"
 #include "thoom/thoom.h"
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  if (!thoom::Scene::init()) {
+  if (!thoom::Scene::init("", true)) {
     thoom_quit();
     return 1;
   }
@@ -111,10 +111,9 @@ bool init(int argc, char** argv) {
     options += argv[i];
   }
 
-  thoom::Scene::ObjectDef editor;
+  thoom::ObjectDef editor;
   editor.id = "editor";
   editor.create_object = Editor::create_object;
-  editor.replicated = false;
   editor.order = thoom::kObjectNormal;
   thoom::Scene::instance->register_object(editor);
   thoom::Scene::instance->create_object("editor", options);
