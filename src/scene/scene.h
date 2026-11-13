@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <queue>
 #include <string>
 #include <unordered_map>
@@ -8,6 +9,7 @@
 #include <vector>
 
 #include "map/map.h"
+#include "object/area.h"
 #include "object/entity.h"
 #include "object/object.h"
 #include "thoom/thoom.h"
@@ -43,8 +45,13 @@ class Scene {
                      const EntityOptions& entity_options);
   void replicate_entity(const EntityRecord& record);
 
+  void queue_event(Entity::Event event);
+
   Object* find_object(thoom_lid lid);
   Entity* find_entity(thoom_gid gid);
+  Object* find_node(const Entity::NodeKey& key);
+  std::vector<Entity*> find_entities(Entity::AuthorityScope authority);
+  std::vector<Area*> find_areas(const AreaQuery& query);
 
   void save_objects();
 
@@ -65,10 +72,16 @@ class Scene {
       CreationRequest;
 
   void tick();
+  void apply_events(thoom_pid current_pid);
   void step_local_trees(thoom_pid current_pid);
   void render_trees();
   void destroy_deleted_trees();
   void destroy_object(Object* object);
+
+  static bool authority_matches(thoom_pid owner_pid, thoom_pid current_pid,
+                                Entity::AuthorityScope authority);
+  static void collect_areas(Object& object, const AreaQuery& query,
+                            thoom_pid current_pid, std::vector<Area*>& areas);
 
   void load_map(const std::string& path, bool create_objects);
   void unload();
@@ -105,6 +118,7 @@ class Scene {
   std::unordered_map<std::string, ObjectDef> object_factories;
   std::unordered_map<std::string, EntityDef> entity_factories;
   std::queue<CreationRequest> creation_requests;
+  std::deque<Entity::Event> events;
 };
 
 };  // namespace thoom

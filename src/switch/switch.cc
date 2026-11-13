@@ -8,11 +8,11 @@
 #include <utility>
 #include <vector>
 
-#include "switch/bytes.h"
 #include "switch/frame.h"
 #include "switch/peer_identity.h"
 #include "thoom/log.h"
 #include "thoom/thoom.h"
+#include "utils/bytes.h"
 
 namespace thoom {
 

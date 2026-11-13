@@ -1,4 +1,4 @@
-#include "switch/bytes.h"
+#include "utils/bytes.h"
 
 #include <cstdint>
 #include <cstring>
@@ -9,7 +9,10 @@ static const uint8_t EMPTY_BYTE = 0;
 
 namespace thoom {
 
-void ByteWriter::write_u8(uint8_t value) { this->buffer.push_back(value); }
+ByteWriter::ByteWriter(std::vector<uint8_t>& external_buffer)
+    : external_buffer(&external_buffer) {}
+
+void ByteWriter::write_u8(uint8_t value) { this->buffer().push_back(value); }
 
 void ByteWriter::write_u16(uint16_t value) {
   this->write_u8(static_cast<uint8_t>(value));
@@ -46,13 +49,15 @@ void ByteWriter::write_blob(const void* data, uint32_t size) {
     size = 0;
   }
 
+  std::vector<uint8_t>& buffer = this->buffer();
+
   // A source inside our own buffer must be copied before the length write can
   // reallocate it.
   const uintptr_t start = reinterpret_cast<uintptr_t>(bytes);
-  const uintptr_t first = reinterpret_cast<uintptr_t>(this->buffer.data());
-  const uintptr_t last = first + this->buffer.size();
+  const uintptr_t first = reinterpret_cast<uintptr_t>(buffer.data());
+  const uintptr_t last = first + buffer.size();
   const bool aliases =
-      size > 0 && !this->buffer.empty() && start >= first && start < last;
+      size > 0 && !buffer.empty() && start >= first && start < last;
 
   if (aliases) {
     const uint32_t available = static_cast<uint32_t>(last - start);
@@ -62,7 +67,7 @@ void ByteWriter::write_blob(const void* data, uint32_t size) {
 
     const std::vector<uint8_t> copy(bytes, bytes + size);
     this->write_u32(size);
-    this->buffer.insert(this->buffer.end(), copy.begin(), copy.end());
+    buffer.insert(buffer.end(), copy.begin(), copy.end());
     return;
   }
 
@@ -71,12 +76,20 @@ void ByteWriter::write_blob(const void* data, uint32_t size) {
     return;
   }
 
-  this->buffer.insert(this->buffer.end(), bytes, bytes + size);
+  buffer.insert(buffer.end(), bytes, bytes + size);
 }
 
-const std::vector<uint8_t>& ByteWriter::bytes() const { return this->buffer; }
+const std::vector<uint8_t>& ByteWriter::bytes() const {
+  return this->external_buffer != nullptr ? *this->external_buffer
+                                          : this->owned_buffer;
+}
 
-void ByteWriter::clear() { this->buffer.clear(); }
+void ByteWriter::clear() { this->buffer().clear(); }
+
+std::vector<uint8_t>& ByteWriter::buffer() {
+  return this->external_buffer != nullptr ? *this->external_buffer
+                                          : this->owned_buffer;
+}
 
 ByteReader::ByteReader(const void* data, uint32_t size) {
   if (data == nullptr && size > 0) {
@@ -87,6 +100,10 @@ ByteReader::ByteReader(const void* data, uint32_t size) {
   this->data = size > 0 ? static_cast<const uint8_t*>(data) : &EMPTY_BYTE;
   this->size = size;
 }
+
+ByteReader::ByteReader(const std::vector<uint8_t>& external_buffer)
+    : ByteReader(external_buffer.data(),
+                 static_cast<uint32_t>(external_buffer.size())) {}
 
 bool ByteReader::ok() const { return !this->failed; }
 

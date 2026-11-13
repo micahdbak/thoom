@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "SDL3/SDL.h"
+#include "object/area.h"
 #include "object/entity.h"
 #include "object/object.h"
 #include "scene/scene.h"
@@ -22,6 +24,20 @@ class TestObject : public thoom::Object {
   int render_count = 0;
 };
 
+class TestNode : public thoom::Entity::Node {
+ public:
+  TestNode(thoom::Object& parent, std::optional<thoom_nid> nid)
+      : thoom::Entity::Node(parent, nid) {}
+
+  void step() override {}
+
+  void receive_event(const thoom::Entity::Event&) override {
+    this->event_count++;
+  }
+
+  int event_count = 0;
+};
+
 class TestEntity : public thoom::Entity {
  public:
   explicit TestEntity(const thoom::Entity::Context& context)
@@ -32,11 +48,27 @@ class TestEntity : public thoom::Entity {
     TestEntity::constructor_owner_pid = this->owner_pid;
   }
 
-  void step() override { this->step_count++; }
+  void step() override {
+    this->step_count++;
+    if (this->event_count > 0) {
+      this->event_seen_in_step = true;
+    }
+  }
+
   void render() override { this->render_count++; }
+
+  void receive_event(const thoom::Entity::Event& event) override {
+    this->event_count++;
+    this->last_kind = event.kind;
+    this->last_payload = event.payload;
+  }
 
   int step_count = 0;
   int render_count = 0;
+  int event_count = 0;
+  uint32_t last_kind = 0;
+  std::vector<uint8_t> last_payload;
+  bool event_seen_in_step = false;
 
   inline static thoom_pid constructor_creator_pid = THOOM_PID_INVALID;
   inline static std::optional<thoom_gid> constructor_received_gid;
@@ -353,6 +385,125 @@ TEST_F(SceneTest, ReceivedRecordUsesExactOwnership) {
 
   EXPECT_EQ(entity->owner_pid, 4u);
   EXPECT_EQ(entity->ownership, thoom::Entity::Ownership::kRoundRobin);
+}
+
+TEST_F(SceneTest, FindNodeResolvesRootsAndNodesByKey) {
+  become_host();
+  TestEntity* entity = this->create_entity("test_entity");
+  ASSERT_NE(entity, nullptr);
+  TestNode* node = new TestNode(*entity, 7);
+
+  EXPECT_EQ(entity->key(),
+            (thoom::Entity::NodeKey{entity->gid, thoom::Entity::kRootNid}));
+  EXPECT_EQ(node->key(), (thoom::Entity::NodeKey{entity->gid, 7}));
+  EXPECT_EQ(thoom::Scene::instance->find_node(entity->key()), entity);
+  EXPECT_EQ(thoom::Scene::instance->find_node(node->key()), node);
+  EXPECT_EQ(thoom::Scene::instance->find_node({entity->gid, 8}), nullptr);
+  EXPECT_EQ(thoom::Scene::instance->find_node({THOOM_GID_INVALID, 0}), nullptr);
+
+  node->deleted = true;
+  EXPECT_EQ(thoom::Scene::instance->find_node(node->key()), nullptr);
+}
+
+TEST_F(SceneTest, FindEntitiesFiltersByAuthorityAndSortsByGid) {
+  thoom::PeerIdentity::instance->set_current(7);
+  TestEntity* remote = this->create_entity_with_policy(
+      "test_entity", {thoom::Entity::Ownership::kFixed, THOOM_PID_HOST});
+  TestEntity* local = this->create_entity_with_policy(
+      "test_entity", {thoom::Entity::Ownership::kFixed, 7});
+  ASSERT_NE(remote, nullptr);
+  ASSERT_NE(local, nullptr);
+  ASSERT_NE(this->create_object("test_object"), nullptr);
+
+  EXPECT_EQ(thoom::Scene::instance->find_entities(
+                thoom::Entity::AuthorityScope::kAll),
+            std::vector<thoom::Entity*>({remote, local}));
+  EXPECT_EQ(thoom::Scene::instance->find_entities(
+                thoom::Entity::AuthorityScope::kLocal),
+            std::vector<thoom::Entity*>({local}));
+  EXPECT_EQ(thoom::Scene::instance->find_entities(
+                thoom::Entity::AuthorityScope::kRemote),
+            std::vector<thoom::Entity*>({remote}));
+}
+
+TEST_F(SceneTest, FindAreasFiltersGroupsAuthorityAndSortsByKey) {
+  thoom::PeerIdentity::instance->set_current(7);
+  TestEntity* remote = this->create_entity_with_policy(
+      "test_entity", {thoom::Entity::Ownership::kFixed, THOOM_PID_HOST});
+  TestEntity* local = this->create_entity_with_policy(
+      "test_entity", {thoom::Entity::Ownership::kFixed, 7});
+  ASSERT_NE(remote, nullptr);
+  ASSERT_NE(local, nullptr);
+
+  thoom::Area* remote_area =
+      new thoom::Area(*remote, 1, SDL_FRect{0.0f, 0.0f, 16.0f, 16.0f}, 1);
+  thoom::Area* local_area =
+      new thoom::Area(*local, 2, SDL_FRect{0.0f, 0.0f, 16.0f, 16.0f}, 2);
+  thoom::Area* first_local_area =
+      new thoom::Area(*local, 1, SDL_FRect{0.0f, 0.0f, 16.0f, 16.0f}, 2);
+  thoom::Area* disabled =
+      new thoom::Area(*local, 3, SDL_FRect{0.0f, 0.0f, 16.0f, 16.0f}, 2);
+  thoom::Area* outside =
+      new thoom::Area(*local, 4, SDL_FRect{32.0f, 32.0f, 16.0f, 16.0f}, 2);
+  disabled->enabled = false;
+
+  thoom::AreaQuery query;
+  query.bounds = SDL_FRect{0.0f, 0.0f, 8.0f, 8.0f};
+  query.groups = 2;
+  query.authority = thoom::Entity::AuthorityScope::kLocal;
+
+  EXPECT_EQ(thoom::Scene::instance->find_areas(query),
+            std::vector<thoom::Area*>({first_local_area, local_area}));
+
+  query.groups = 1;
+  query.authority = thoom::Entity::AuthorityScope::kAll;
+  EXPECT_EQ(thoom::Scene::instance->find_areas(query),
+            std::vector<thoom::Area*>({remote_area}));
+
+  EXPECT_NE(disabled, nullptr);
+  EXPECT_NE(outside, nullptr);
+}
+
+TEST_F(SceneTest, QueuedEventAppliesBeforeStep) {
+  become_host();
+  TestEntity* entity = this->create_entity("test_entity");
+  ASSERT_NE(entity, nullptr);
+
+  thoom::Entity::Event event;
+  event.target = entity->key();
+  event.kind = 9;
+  event.payload = {1, 2, 3};
+  thoom::Scene::instance->queue_event(event);
+
+  EXPECT_EQ(entity->event_count, 0);
+  this->tick();
+  EXPECT_EQ(entity->event_count, 1);
+  EXPECT_EQ(entity->last_kind, 9u);
+  EXPECT_EQ(entity->last_payload, std::vector<uint8_t>({1, 2, 3}));
+  EXPECT_TRUE(entity->event_seen_in_step);
+}
+
+TEST_F(SceneTest, EventTargetsNodesAndDropsForNonOwners) {
+  thoom::PeerIdentity::instance->set_current(7);
+  TestEntity* remote = this->create_entity_with_policy(
+      "test_entity", {thoom::Entity::Ownership::kFixed, THOOM_PID_HOST});
+  TestEntity* local = this->create_entity_with_policy(
+      "test_entity", {thoom::Entity::Ownership::kFixed, 7});
+  ASSERT_NE(remote, nullptr);
+  ASSERT_NE(local, nullptr);
+  TestNode* node = new TestNode(*local, 1);
+
+  thoom::Entity::Event remote_event;
+  remote_event.target = remote->key();
+  thoom::Scene::instance->queue_event(remote_event);
+
+  thoom::Entity::Event node_event;
+  node_event.target = node->key();
+  thoom::Scene::instance->queue_event(node_event);
+
+  this->tick();
+  EXPECT_EQ(remote->event_count, 0);
+  EXPECT_EQ(node->event_count, 1);
 }
 
 TEST_F(SceneTest, NonOwnedEntityOnlyRenders) {

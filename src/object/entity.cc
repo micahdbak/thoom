@@ -23,13 +23,18 @@ Entity& Entity::Node::root_for(Object& parent) {
   thoom_log_fatal("Entity::Node: parent does not belong to an entity");
 }
 
-Entity::Node::Node(Object& parent, std::optional<NodeId> id)
+Entity::Node::Node(Object& parent, std::optional<thoom_nid> explicit_nid)
     : Object(&parent),
       entity(root_for(parent)),
-      node_id(id.has_value() ? id.value() : entity.issue_node_id()) {
-  if (id.has_value()) {
-    entity.reserve_node_id(*this);
+      nid(explicit_nid.has_value() ? explicit_nid.value()
+                                   : entity.issue_nid()) {
+  if (explicit_nid.has_value()) {
+    entity.reserve_nid(*this);
   }
+}
+
+Entity::NodeKey Entity::Node::key() const {
+  return {this->entity.gid, this->nid};
 }
 
 Entity::Entity(const Context& context)
@@ -50,45 +55,47 @@ Entity::Entity(const Context& context)
   }
 }
 
-Object* Entity::find_node(NodeId id) {
-  if (id == 0) {
+Entity::NodeKey Entity::key() const { return {this->gid, kRootNid}; }
+
+Object* Entity::find_node(thoom_nid nid) {
+  if (nid == kRootNid) {
     return this;
   }
 
-  return this->find_descendant(*this, id);
+  return this->find_descendant(*this, nid);
 }
 
-NodeId Entity::issue_node_id() {
-  if (this->next_node_id == 0) {
+thoom_nid Entity::issue_nid() {
+  if (this->next_nid == 0) {
     thoom_log_fatal("Entity: no node ids remain");
   }
 
-  return this->next_node_id++;
+  return this->next_nid++;
 }
 
-void Entity::reserve_node_id(Node& node) {
-  if (node.node_id == 0) {
+void Entity::reserve_nid(Node& node) {
+  if (node.nid == kRootNid) {
     thoom_log_fatal("Entity: node id zero names the root");
   }
 
-  Object* existing = this->find_node(node.node_id);
+  Object* existing = this->find_node(node.nid);
   if (existing != &node) {
-    thoom_log_fatal("Entity: repeated node id %" PRIu32, node.node_id);
+    thoom_log_fatal("Entity: repeated node id %" PRIu32, node.nid);
   }
 
-  if (node.node_id >= this->next_node_id) {
-    this->next_node_id = node.node_id + 1;
+  if (node.nid >= this->next_nid) {
+    this->next_nid = node.nid + 1;
   }
 }
 
-Object* Entity::find_descendant(Object& object, NodeId id) {
+Object* Entity::find_descendant(Object& object, thoom_nid nid) {
   for (Object* child : object.get_children()) {
     Node* node = dynamic_cast<Node*>(child);
-    if (node != nullptr && node->node_id == id) {
+    if (node != nullptr && node->nid == nid) {
       return child;
     }
 
-    Object* result = this->find_descendant(*child, id);
+    Object* result = this->find_descendant(*child, nid);
     if (result != nullptr) {
       return result;
     }

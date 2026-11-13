@@ -8,6 +8,9 @@ namespace thoom {
 
 class ByteWriter {
  public:
+  ByteWriter() = default;
+  explicit ByteWriter(std::vector<uint8_t>& external_buffer);
+
   void write_u8(uint8_t value);
   void write_u16(uint16_t value);
   void write_u32(uint32_t value);
@@ -21,12 +24,16 @@ class ByteWriter {
   void clear();
 
  private:
-  std::vector<uint8_t> buffer;
+  std::vector<uint8_t>& buffer();
+
+  std::vector<uint8_t> owned_buffer;
+  std::vector<uint8_t>* external_buffer = nullptr;
 };
 
 class ByteReader {
  public:
   ByteReader(const void* data, uint32_t size);
+  explicit ByteReader(const std::vector<uint8_t>& external_buffer);
 
   bool ok() const;
   uint32_t remaining() const;
