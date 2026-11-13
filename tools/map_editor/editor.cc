@@ -4,11 +4,9 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
 #include <string>
 #include <vector>
 
-#include "absl/log/log.h"
 #include "colour.h"
 #include "editor_ui.h"
 #include "hud/hud.h"
@@ -22,6 +20,7 @@
 #include "renderer/font.h"
 #include "renderer/renderer.h"
 #include "texture/texture.h"
+#include "thoom/log.h"
 #include "thoom/macros.h"
 #include "window/window.h"
 
@@ -31,7 +30,8 @@ static void parse_billboard_options(const std::string& options, int* x, int* y,
   char buff[1024];
   if (sscanf(options.c_str(), "%d,%d,%d,%d,%d,%d,%d,%1023[^\n]", x, y, ts_x,
              ts_y, w, h, depth, buff) < 8) {
-    LOG(FATAL) << "parse_billboard_options error: bad options: " << options;
+    thoom_log_fatal("parse_billboard_options: bad options '%s'",
+                    options.c_str());
   }
 
   tilesheet = buff;
@@ -44,8 +44,9 @@ Editor::Editor(const std::vector<std::string>& args) : thoom::Object(nullptr) {
   FILE* file = fopen(bin_path.c_str(), "rb");
   if (file == nullptr) {
     if (args.size() < 6 || (atoi(args[5].c_str()) && args.size() < 7)) {
-      LOG(FATAL) << "To create a new map please provide: <map name> <tw> <th> "
-                    "<cols> <rows> <fill(0/1)> <fillts(opt)>.";
+      thoom_log_fatal(
+          "To create a new map please provide: <map name> <tw> "
+          "<th> <cols> <rows> <fill(0/1)> <fillts(opt)>.");
     }
 
     int tile_width = atoi(args[1].c_str());
@@ -59,7 +60,7 @@ Editor::Editor(const std::vector<std::string>& args) : thoom::Object(nullptr) {
 
     if (should_fill) {
       if (!this->map->add_tilesheet(args[6].c_str())) {
-        LOG(FATAL) << args[6] << " is not a valid tilesheet.";
+        thoom_log_fatal("%s is not a valid tilesheet.", args[6].c_str());
       }
 
       thoom::Tilesheet* tilesheet = this->map->tilesheets[0];
@@ -141,10 +142,18 @@ void Editor::step() {
         this->cycle_layer();
         break;
       case 'x': {
-        std::cout << "exporting map to mapdump.bmp" << std::endl;
+        thoom_log_info("exporting map to mapdump.bmp");
         SDL_Surface* background = thoom::Window::instance->read_pixels(
             this->map->layers[thoom::Map::kBackgroundLayer]->texture);
-        SDL_SaveBMP(background, "mapdump.bmp");
+        if (background == nullptr) {
+          thoom_log_warn("Editor: could not read the background layer: %s",
+                         SDL_GetError());
+          break;
+        }
+        if (!SDL_SaveBMP(background, "mapdump.bmp")) {
+          thoom_log_warn("Editor: could not save mapdump.bmp: %s",
+                         SDL_GetError());
+        }
         SDL_DestroySurface(background);
       } break;
       default:

@@ -2,23 +2,23 @@
 
 #include <SDL3/SDL.h>
 
-#include "absl/log/log.h"
 #include "texture/texture.h"
+#include "thoom/log.h"
 
 namespace thoom {
 
 Tilesheet::Tilesheet(const char* tilesheet_path, int tile_width,
                      int tile_height) {
   if (tile_width <= 0 || tile_height <= 0) {
-    LOG(ERROR) << "Tilesheet::Tilesheet error: invalid tile size " << tile_width
-               << "x" << tile_height;
+    thoom_log_error("Tilesheet::Tilesheet error: invalid tile size %dx%d",
+                    tile_width, tile_height);
     return;
   }
 
   SDL_Surface* tilesheet_surface = SDL_LoadBMP(tilesheet_path);
   if (tilesheet_surface == nullptr) {
-    LOG(ERROR) << "Tilesheet::Tilesheet error: '" << tilesheet_path
-               << "' does not exist";
+    thoom_log_error("Tilesheet::Tilesheet error: '%s' does not exist",
+                    tilesheet_path);
     return;
   }
 

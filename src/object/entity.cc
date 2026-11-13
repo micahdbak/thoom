@@ -1,9 +1,10 @@
 #include "object/entity.h"
 
+#include <cinttypes>
 #include <optional>
 
-#include "absl/log/log.h"
 #include "object/object.h"
+#include "thoom/log.h"
 #include "thoom/thoom.h"
 
 namespace thoom {
@@ -19,7 +20,7 @@ Entity& Entity::Node::root_for(Object& parent) {
     return node->entity;
   }
 
-  LOG(FATAL) << "Entity::Node: parent does not belong to an entity";
+  thoom_log_fatal("Entity::Node: parent does not belong to an entity");
 }
 
 Entity::Node::Node(Object& parent, std::optional<NodeId> id)
@@ -39,13 +40,13 @@ Entity::Entity(const Context& context)
       owner_pid(context.owner_pid),
       ownership(context.ownership) {
   if (context.creator_pid == THOOM_PID_INVALID) {
-    LOG(FATAL) << "Entity: invalid creator pid";
+    thoom_log_fatal("Entity: invalid creator pid");
   }
   if (this->gid == THOOM_GID_INVALID) {
-    LOG(FATAL) << "Entity: invalid gid";
+    thoom_log_fatal("Entity: invalid gid");
   }
   if (this->owner_pid == THOOM_PID_INVALID) {
-    LOG(FATAL) << "Entity: invalid owner pid";
+    thoom_log_fatal("Entity: invalid owner pid");
   }
 }
 
@@ -59,7 +60,7 @@ Object* Entity::find_node(NodeId id) {
 
 NodeId Entity::issue_node_id() {
   if (this->next_node_id == 0) {
-    LOG(FATAL) << "Entity: no node ids remain";
+    thoom_log_fatal("Entity: no node ids remain");
   }
 
   return this->next_node_id++;
@@ -67,12 +68,12 @@ NodeId Entity::issue_node_id() {
 
 void Entity::reserve_node_id(Node& node) {
   if (node.node_id == 0) {
-    LOG(FATAL) << "Entity: node id zero names the root";
+    thoom_log_fatal("Entity: node id zero names the root");
   }
 
   Object* existing = this->find_node(node.node_id);
   if (existing != &node) {
-    LOG(FATAL) << "Entity: repeated node id " << node.node_id;
+    thoom_log_fatal("Entity: repeated node id %" PRIu32, node.node_id);
   }
 
   if (node.node_id >= this->next_node_id) {

@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <iostream>
 #include <string>
 
 #include "audio/audio.h"
@@ -16,6 +15,7 @@
 #include "object/object.h"
 #include "renderer/renderer.h"
 #include "scene/scene.h"
+#include "thoom/log.h"
 #include "thoom/thoom.h"
 #include "window/window.h"
 
@@ -23,8 +23,7 @@ bool init(int argc, char** argv);
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::cerr << "Please provide a map to edit via the command line."
-              << std::endl;
+    thoom_log_error("Please provide a map to edit via the command line.");
     return 1;
   }
 
@@ -34,9 +33,9 @@ int main(int argc, char** argv) {
   if (map_file != nullptr) {
     std::fclose(map_file);
   } else if (argc < 7) {
-    std::cerr << "To create a new map please provide: <map name> <tw> <th> "
-                 "<cols> <rows> <fill(0/1)> <fillts(opt)>."
-              << std::endl;
+    thoom_log_error(
+        "To create a new map please provide: <map name> <tw> "
+        "<th> <cols> <rows> <fill(0/1)> <fillts(opt)>.");
     return 1;
   }
 
@@ -44,15 +43,18 @@ int main(int argc, char** argv) {
 
   if (!thoom_init("Thoom Engine", THOOM_SCREEN_WIDTH, THOOM_SCREEN_HEIGHT,
                   kBackground.val, &hud)) {
+    thoom_log_error("map_editor: could not initialize thoom");
     return 1;
   }
 
   if (!thoom::Scene::init("", true)) {
+    thoom_log_error("map_editor: could not initialize the scene");
     thoom_quit();
     return 1;
   }
 
   if (!init(argc, argv)) {
+    thoom_log_error("map_editor: editor init failed");
     thoom::Scene::quit();
     thoom_quit();
     return 1;
@@ -100,8 +102,7 @@ int main(int argc, char** argv) {
 
 bool init(int argc, char** argv) {
   if (argc < 2) {
-    std::cerr << "Please provide a map to edit via the command line."
-              << std::endl;
+    thoom_log_error("Please provide a map to edit via the command line.");
     return false;
   }
 

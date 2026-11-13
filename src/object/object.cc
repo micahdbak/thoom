@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "absl/log/log.h"
+#include "thoom/log.h"
 #include "thoom/thoom.h"
 
 namespace thoom {
@@ -12,7 +12,7 @@ thoom_lid Object::next_lid = 0;
 
 Object::Object(Object* parent) : lid(next_lid++), parent(parent) {
   if (next_lid == 0) {
-    LOG(FATAL) << "Object: no lids remain";
+    thoom_log_fatal("Object: no lids remain");
   }
 
   if (parent != nullptr) {

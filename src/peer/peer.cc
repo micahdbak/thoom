@@ -8,8 +8,8 @@
 #include <thread>
 #include <utility>
 
-#include "absl/log/log.h"
 #include "switch/switch.h"
+#include "thoom/log.h"
 #include "thoom/thoom.h"
 #include "webrtc/webrtc_switch.h"
 
@@ -19,7 +19,7 @@ namespace thoom {
 
 bool Peer::init(bool host) {
   if (Peer::instance != nullptr) {
-    LOG(ERROR) << "Peer::init error: a peer already exists";
+    thoom_log_error("Peer::init error: a peer already exists");
     return false;
   }
 
@@ -106,7 +106,7 @@ void Peer::run() {
 
 void Peer::join_room(const std::string& code) {
   if (this->host.load()) {
-    LOG(ERROR) << "Peer: a host cannot join a room";
+    thoom_log_error("Peer: a host cannot join a room");
     return;
   }
 
@@ -123,7 +123,7 @@ void Peer::join_room(const std::string& code) {
   this->recv_queue.take_all();
 
   if (!this->net->join(Switch::Options(), code.c_str())) {
-    LOG(ERROR) << "Peer: the room " << code << " was not entered";
+    thoom_log_error("Peer: the room %s was not entered", code.c_str());
   }
 }
 
@@ -141,7 +141,7 @@ void Peer::poll_switch() {
       datagram.bytes.assign(text.begin(), text.end());
 
       if (!this->net->send(datagram)) {
-        LOG(WARNING) << "Peer: a queued message was not sent";
+        thoom_log_warn("Peer: a queued message was not sent");
       }
     }
   }

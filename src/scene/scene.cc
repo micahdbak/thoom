@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <cinttypes>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -11,7 +12,6 @@
 #include <variant>
 #include <vector>
 
-#include "absl/log/log.h"
 #include "audio/audio.h"
 #include "colour.h"
 #include "hud/hud.h"
@@ -21,6 +21,7 @@
 #include "renderer/renderer.h"
 #include "save/save_data.h"
 #include "switch/peer_identity.h"
+#include "thoom/log.h"
 #include "thoom/thoom.h"
 
 #define THOOM_TICK_NS 16666667
@@ -34,7 +35,7 @@ bool Scene::init(const std::string& initial_map, bool create_objects) {
     return true;
   }
 
-  LOG(ERROR) << "Scene::init error: scene already initialized";
+  thoom_log_error("Scene::init error: scene already initialized");
   return false;
 }
 
@@ -80,14 +81,14 @@ Scene::~Scene() {
 
 void Scene::register_object(const ObjectDef& def) {
   if (def.id == nullptr || def.create_object == nullptr) {
-    LOG(ERROR) << "Scene::register_object error: incomplete definition";
+    thoom_log_error("Scene::register_object error: incomplete definition");
     return;
   }
 
   if (this->find_object_definition(def.id) != nullptr ||
       this->find_entity_definition(def.id) != nullptr) {
-    LOG(FATAL) << "Scene::register_object error: '" << def.id
-               << "' already exists";
+    thoom_log_fatal("Scene::register_object error: '%s' already exists",
+                    def.id);
   }
 
   this->object_factories.emplace(def.id, def);
@@ -95,7 +96,7 @@ void Scene::register_object(const ObjectDef& def) {
 
 void Scene::register_objects(const ObjectDef* defs) {
   if (defs == nullptr) {
-    LOG(ERROR) << "Scene::register_objects error: no definition table";
+    thoom_log_error("Scene::register_objects error: no definition table");
     return;
   }
 
@@ -106,14 +107,14 @@ void Scene::register_objects(const ObjectDef* defs) {
 
 void Scene::register_entity(const EntityDef& def) {
   if (def.id == nullptr || def.create_entity == nullptr) {
-    LOG(ERROR) << "Scene::register_entity error: incomplete definition";
+    thoom_log_error("Scene::register_entity error: incomplete definition");
     return;
   }
 
   if (this->find_object_definition(def.id) != nullptr ||
       this->find_entity_definition(def.id) != nullptr) {
-    LOG(FATAL) << "Scene::register_entity error: '" << def.id
-               << "' already exists";
+    thoom_log_fatal("Scene::register_entity error: '%s' already exists",
+                    def.id);
   }
 
   this->entity_factories.emplace(def.id, def);
@@ -121,7 +122,7 @@ void Scene::register_entity(const EntityDef& def) {
 
 void Scene::register_entities(const EntityDef* defs) {
   if (defs == nullptr) {
-    LOG(ERROR) << "Scene::register_entities error: no definition table";
+    thoom_log_error("Scene::register_entities error: no definition table");
     return;
   }
 
@@ -137,8 +138,10 @@ void Scene::request_map(const std::string& path, bool create_objects) {
 
 void Scene::create_object(const std::string& id, const std::string& options) {
   if (this->find_entity_definition(id) != nullptr) {
-    LOG(ERROR) << "Scene::create_object error: '" << id
-               << "' is an entity; use create_entity";
+    thoom_log_error(
+        "Scene::create_object error: '%s' is an entity; use "
+        "create_entity",
+        id.c_str());
     return;
   }
 
@@ -148,8 +151,10 @@ void Scene::create_object(const std::string& id, const std::string& options) {
 void Scene::create_entity(const std::string& id, const std::string& options,
                           const EntityOptions& entity_options) {
   if (this->find_object_definition(id) != nullptr) {
-    LOG(ERROR) << "Scene::create_entity error: '" << id
-               << "' is an object; use create_object";
+    thoom_log_error(
+        "Scene::create_entity error: '%s' is an object; use "
+        "create_object",
+        id.c_str());
     return;
   }
 
@@ -372,13 +377,13 @@ void Scene::create_map_object(const ObjectRequest& request) {
     return;
   }
 
-  LOG(ERROR) << "Scene::create_map_object error: '" << request.id
-             << "' does not exist";
+  thoom_log_error("Scene::create_map_object error: '%s' does not exist",
+                  request.id.c_str());
 }
 
 void Scene::request_creation(CreationRequest request) {
   if (this->state == Scene::kUnloading) {
-    LOG(WARNING) << "Scene: creation request dropped while the scene unloads";
+    thoom_log_warn("Scene: creation request dropped while the scene unloads");
     return;
   }
 
@@ -392,8 +397,8 @@ void Scene::request_creation(CreationRequest request) {
 void Scene::process_object_request(const ObjectRequest& request) {
   const ObjectDef* def = this->find_object_definition(request.id);
   if (def == nullptr) {
-    LOG(ERROR) << "Scene::create_object error: '" << request.id
-               << "' does not exist";
+    thoom_log_error("Scene::create_object error: '%s' does not exist",
+                    request.id.c_str());
     return;
   }
 
@@ -403,28 +408,31 @@ void Scene::process_object_request(const ObjectRequest& request) {
 void Scene::process_entity_request(const EntityRequest& request) {
   const EntityDef* def = this->find_entity_definition(request.id);
   if (def == nullptr) {
-    LOG(ERROR) << "Scene::create_entity error: '" << request.id
-               << "' does not exist";
+    thoom_log_error("Scene::create_entity error: '%s' does not exist",
+                    request.id.c_str());
     return;
   }
 
   const thoom_pid current_pid = PeerIdentity::instance->get_current();
   if (current_pid == THOOM_PID_INVALID) {
-    LOG(ERROR) << "Scene::create_entity error: '" << request.id
-               << "' needs a pid to take its id from";
+    thoom_log_error(
+        "Scene::create_entity error: '%s' needs a pid to take "
+        "its id from",
+        request.id.c_str());
     return;
   }
 
   if (request.policy.ownership != Entity::Ownership::kFixed &&
       request.policy.ownership != Entity::Ownership::kRoundRobin) {
-    LOG(ERROR) << "Scene::create_entity error: invalid ownership";
+    thoom_log_error("Scene::create_entity error: invalid ownership");
     return;
   }
 
   if (request.policy.ownership == Entity::Ownership::kRoundRobin &&
       request.policy.owner_pid != THOOM_PID_INVALID) {
-    LOG(ERROR) << "Scene::create_entity error: a round-robin entity cannot "
-                  "request a fixed pid";
+    thoom_log_error(
+        "Scene::create_entity error: a round-robin entity "
+        "cannot request a fixed pid");
     return;
   }
 
@@ -442,8 +450,8 @@ void Scene::process_entity_request(const EntityRequest& request) {
 void Scene::process_entity_record(const EntityRecord& record) {
   const EntityDef* def = this->find_entity_definition(record.id);
   if (def == nullptr) {
-    LOG(ERROR) << "Scene::replicate_entity error: '" << record.id
-               << "' does not exist";
+    thoom_log_error("Scene::replicate_entity error: '%s' does not exist",
+                    record.id.c_str());
     return;
   }
 
@@ -452,12 +460,13 @@ void Scene::process_entity_record(const EntityRecord& record) {
       record.owner_pid == THOOM_PID_INVALID ||
       (record.ownership != Entity::Ownership::kFixed &&
        record.ownership != Entity::Ownership::kRoundRobin)) {
-    LOG(ERROR) << "Scene::replicate_entity error: invalid identity";
+    thoom_log_error("Scene::replicate_entity error: invalid identity");
     return;
   }
 
   if (this->entities_by_gid.find(record.gid) != this->entities_by_gid.end()) {
-    LOG(ERROR) << "Scene::replicate_entity error: repeated gid " << record.gid;
+    thoom_log_error("Scene::replicate_entity error: repeated gid %" PRIu64,
+                    record.gid);
     return;
   }
 
@@ -496,14 +505,16 @@ void Scene::instantiate_object(const ObjectDef& def,
                                const std::string& options) {
   Object* object = def.create_object(options);
   if (object == nullptr) {
-    LOG(ERROR) << "Scene::create_object error: '" << def.id
-               << "' factory returned null";
+    thoom_log_error("Scene::create_object error: '%s' factory returned null",
+                    def.id);
     return;
   }
 
   if (dynamic_cast<Entity*>(object) != nullptr) {
-    LOG(ERROR) << "Scene::create_object error: '" << def.id
-               << "' factory did not return a local root";
+    thoom_log_error(
+        "Scene::create_object error: '%s' factory did not "
+        "return a local root",
+        def.id);
     delete object;
     return;
   }
@@ -516,8 +527,8 @@ void Scene::instantiate_entity(const EntityDef& def,
                                const std::string& options) {
   Entity* entity = def.create_entity(context, options);
   if (entity == nullptr) {
-    LOG(ERROR) << "Scene::create_entity error: '" << def.id
-               << "' factory returned null";
+    thoom_log_error("Scene::create_entity error: '%s' factory returned null",
+                    def.id);
     return;
   }
 
@@ -530,7 +541,7 @@ bool Scene::admit_root(Object* object, ObjectOrder order) {
   }
 
   if (object->get_parent() != nullptr) {
-    LOG(ERROR) << "Scene: a root cannot have a parent";
+    thoom_log_error("Scene: a root cannot have a parent");
     delete object;
     return false;
   }
@@ -541,13 +552,13 @@ bool Scene::admit_root(Object* object, ObjectOrder order) {
   }
 
   if (this->objects_by_lid.find(object->lid) != this->objects_by_lid.end()) {
-    LOG(FATAL) << "Scene: repeated lid " << object->lid;
+    thoom_log_fatal("Scene: repeated lid %" PRIu32, object->lid);
   }
 
   Entity* entity = dynamic_cast<Entity*>(object);
   if (entity != nullptr &&
       !this->entities_by_gid.emplace(entity->gid, entity).second) {
-    LOG(ERROR) << "Scene: repeated gid " << entity->gid;
+    thoom_log_error("Scene: repeated gid %" PRIu64, entity->gid);
     delete entity;
     return false;
   }

@@ -8,7 +8,7 @@
 #include <random>
 #include <string>
 
-#include "absl/log/log.h"
+#include "thoom/log.h"
 
 #define SIGNALLING_URL "wss://cheese.micahdb.com/sc/"
 
@@ -57,7 +57,7 @@ bool WebRtcSignaller::valid_code(const std::string& code) {
 
 bool WebRtcSignaller::connect(const std::string& code) {
   if (this->state != WebRtcSignaller::kNotConnected || this->ws >= 0) {
-    LOG(WARNING) << "WebRtcSignaller::connect: already connecting or connected";
+    thoom_log_warn("WebRtcSignaller::connect: already connecting or connected");
     return false;
   }
 
@@ -76,9 +76,10 @@ bool WebRtcSignaller::connect(const std::string& code) {
       code;
   this->ws = rtcCreateWebSocket(url.c_str());
   if (this->ws < 0) {
-    LOG(ERROR)
-        << "WebRtcSignaller::connect: rtcCreateWebSocket returned error code: "
-        << this->ws;
+    thoom_log_error(
+        "WebRtcSignaller::connect: rtcCreateWebSocket returned "
+        "error code: %d",
+        this->ws);
     return false;
   }
 
@@ -192,7 +193,7 @@ void WebRtcSignaller::on_close(int, void* user_ptr) {
 }
 
 void WebRtcSignaller::on_error(int, const char* error, void* user_ptr) {
-  LOG(ERROR) << "WebRtcSignaller::on_error: " << error;
+  thoom_log_error("WebRtcSignaller::on_error: %s", error);
   WebRtcSignaller* signaller = static_cast<WebRtcSignaller*>(user_ptr);
   std::lock_guard<std::mutex> guard(signaller->mutex);
   signaller->closed = true;
@@ -218,7 +219,7 @@ bool WebRtcSignaller::send_envelope(int peer) {
 
 bool WebRtcSignaller::send_message(const std::string& message) {
   if (this->state != WebRtcSignaller::kConnected || this->ws < 0) {
-    LOG(WARNING) << "WebRtcSignaller::send_message: not connected";
+    thoom_log_warn("WebRtcSignaller::send_message: not connected");
     return false;
   }
 
