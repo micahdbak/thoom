@@ -8,9 +8,18 @@
 extern "C" {
 #endif
 
+/* A unique peer identifier representing a player in a game; 0 is host */
 typedef uint32_t thoom_pid;
+
+/* A unique local identifier for an object in a game */
 typedef uint32_t thoom_lid;
+
+/* A global identifier for an object in a game, unique across all connected
+ * peers */
 typedef uint64_t thoom_gid;
+
+/* A unique node identifier in an object tree; 0 is root */
+typedef uint32_t thoom_nid;
 
 #define THOOM_GID_COMPOSE(pid, lid) \
   ((((thoom_gid)(pid)) << 32) | ((thoom_gid)(lid) & 0xFFFFFFFFu))
@@ -38,7 +47,6 @@ bool thoom_init(const char* title, uint32_t screen_width,
                 const struct hud_def* def);
 
 bool thoom_room_init(bool host);
-
 void thoom_room_quit(void);
 
 void thoom_poll_events(bool* quit);

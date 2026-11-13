@@ -38,10 +38,10 @@ class DummyEntity : public thoom::Entity {
 
 class DummyNode : public thoom::Entity::Node {
  public:
-  DummyNode(thoom::Object& parent, std::optional<thoom::NodeId> id)
-      : thoom::Entity::Node(parent, id) {}
+  DummyNode(thoom::Object& parent, std::optional<thoom_nid> nid)
+      : thoom::Entity::Node(parent, nid) {}
 
-  ~DummyNode() override { DummyNode::destructed_ids.push_back(this->node_id); }
+  ~DummyNode() override { DummyNode::destructed_ids.push_back(this->nid); }
 
   void step() override { this->step_count++; }
   void render() override { this->render_count++; }
@@ -49,7 +49,7 @@ class DummyNode : public thoom::Entity::Node {
   int step_count = 0;
   int render_count = 0;
 
-  inline static std::vector<thoom::NodeId> destructed_ids;
+  inline static std::vector<thoom_nid> destructed_ids;
 };
 
 class DummyAddingEntity : public DummyEntity {
@@ -189,10 +189,10 @@ TEST_F(ObjectTest, NestedTreeTracksParentsChildrenAndRootEntity) {
   EXPECT_EQ(&tree.second->entity, &entity);
   EXPECT_EQ(&tree.great_grandchild->entity, &entity);
 
-  EXPECT_EQ(tree.first->node_id, 1u);
-  EXPECT_EQ(tree.grandchild->node_id, 2u);
-  EXPECT_EQ(tree.second->node_id, 3u);
-  EXPECT_EQ(tree.great_grandchild->node_id, 4u);
+  EXPECT_EQ(tree.first->nid, 1u);
+  EXPECT_EQ(tree.grandchild->nid, 2u);
+  EXPECT_EQ(tree.second->nid, 3u);
+  EXPECT_EQ(tree.great_grandchild->nid, 4u);
 }
 
 TEST_F(ObjectTest, ConstructorBuiltTreeSharesRootIdentity) {
@@ -209,6 +209,16 @@ TEST_F(ObjectTest, ConstructorBuiltTreeSharesRootIdentity) {
   EXPECT_EQ(grandchild->entity.gid, gid);
   EXPECT_EQ(child->entity.owner_pid, 4u);
   EXPECT_EQ(grandchild->entity.owner_pid, 4u);
+}
+
+TEST_F(ObjectTest, EntityAndNodesExposeStableKeys) {
+  DummyEntity entity(this->local_context());
+  DummyNode node(entity, 7);
+
+  EXPECT_EQ(entity.key(),
+            (thoom::Entity::NodeKey{entity.gid, thoom::Entity::kRootNid}));
+  EXPECT_EQ(node.key(), (thoom::Entity::NodeKey{entity.gid, 7}));
+  EXPECT_LT(entity.key(), node.key());
 }
 
 TEST_F(ObjectTest, EntityFindsNodesAtAnyDepth) {
@@ -229,7 +239,7 @@ TEST_F(ObjectTest, NodeIdsAreScopedToTheirEntity) {
   DummyNode first_node(first_entity, std::nullopt);
   DummyNode second_node(second_entity, std::nullopt);
 
-  EXPECT_EQ(first_node.node_id, second_node.node_id);
+  EXPECT_EQ(first_node.nid, second_node.nid);
   EXPECT_EQ(first_entity.find_node(1), &first_node);
   EXPECT_EQ(second_entity.find_node(1), &second_node);
   EXPECT_NE(&first_node.entity, &second_node.entity);
@@ -238,14 +248,14 @@ TEST_F(ObjectTest, NodeIdsAreScopedToTheirEntity) {
 TEST_F(ObjectTest, NodeIdsAreNotReusedAfterDeletion) {
   DummyEntity entity(this->local_context());
   DummyNode* first = new DummyNode(entity, std::nullopt);
-  const thoom::NodeId first_id = first->node_id;
+  const thoom_nid first_nid = first->nid;
 
   delete static_cast<thoom::Object*>(first);
   DummyNode* replacement = new DummyNode(entity, std::nullopt);
 
-  EXPECT_NE(replacement->node_id, first_id);
-  EXPECT_EQ(entity.find_node(first_id), nullptr);
-  EXPECT_EQ(entity.find_node(replacement->node_id), replacement);
+  EXPECT_NE(replacement->nid, first_nid);
+  EXPECT_EQ(entity.find_node(first_nid), nullptr);
+  EXPECT_EQ(entity.find_node(replacement->nid), replacement);
   EXPECT_EQ(entity.get_children().size(), 1u);
 }
 
@@ -256,8 +266,8 @@ TEST_F(ObjectTest, ExplicitNodeIdAdvancesTheAllocatorWithoutReusingLowIds) {
   DummyNode low(entity, 4);
   DummyNode after_low(entity, std::nullopt);
 
-  EXPECT_EQ(next.node_id, 11u);
-  EXPECT_EQ(after_low.node_id, 12u);
+  EXPECT_EQ(next.nid, 11u);
+  EXPECT_EQ(after_low.nid, 12u);
   EXPECT_EQ(entity.find_node(10), &high);
   EXPECT_EQ(entity.find_node(11), &next);
   EXPECT_EQ(entity.find_node(4), &low);
@@ -275,7 +285,7 @@ TEST_F(ObjectTest, DeletingALeafDetachesOnlyThatNode) {
   EXPECT_EQ(entity.find_node(1), tree.first);
   EXPECT_EQ(entity.find_node(2), tree.grandchild);
   EXPECT_EQ(entity.find_node(3), tree.second);
-  EXPECT_EQ(DummyNode::destructed_ids, std::vector<thoom::NodeId>({4}));
+  EXPECT_EQ(DummyNode::destructed_ids, std::vector<thoom_nid>({4}));
 }
 
 TEST_F(ObjectTest, DeletingASubtreeLeavesItsFormerSiblingsIntact) {
@@ -293,7 +303,7 @@ TEST_F(ObjectTest, DeletingASubtreeLeavesItsFormerSiblingsIntact) {
   EXPECT_EQ(tree.second->get_parent(), &entity);
 
   std::sort(DummyNode::destructed_ids.begin(), DummyNode::destructed_ids.end());
-  EXPECT_EQ(DummyNode::destructed_ids, std::vector<thoom::NodeId>({1, 2, 4}));
+  EXPECT_EQ(DummyNode::destructed_ids, std::vector<thoom_nid>({1, 2, 4}));
 }
 
 TEST_F(ObjectTest, DeletedSubtreeCanBeRebuiltWithFreshIds) {
@@ -305,8 +315,8 @@ TEST_F(ObjectTest, DeletedSubtreeCanBeRebuiltWithFreshIds) {
   DummyNode* nested =
       new DummyNode(static_cast<thoom::Object&>(*replacement), std::nullopt);
 
-  EXPECT_EQ(replacement->node_id, 5u);
-  EXPECT_EQ(nested->node_id, 6u);
+  EXPECT_EQ(replacement->nid, 5u);
+  EXPECT_EQ(nested->nid, 6u);
   EXPECT_EQ(entity.find_node(5), replacement);
   EXPECT_EQ(entity.find_node(6), nested);
   EXPECT_EQ(entity.get_children().size(), 2u);
@@ -320,8 +330,7 @@ TEST_F(ObjectTest, EntityDestructionRecursivelyDestroysEveryNodeOnce) {
 
   EXPECT_EQ(DummyEntity::destructed_count, 1);
   std::sort(DummyNode::destructed_ids.begin(), DummyNode::destructed_ids.end());
-  EXPECT_EQ(DummyNode::destructed_ids,
-            std::vector<thoom::NodeId>({1, 2, 3, 4}));
+  EXPECT_EQ(DummyNode::destructed_ids, std::vector<thoom_nid>({1, 2, 3, 4}));
 }
 
 TEST_F(ObjectTest, EmptyEntityDestructionDoesNotDestroyAnyNodes) {

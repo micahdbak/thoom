@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "switch/bytes.h"
+#include "utils/bytes.h"
 
 namespace {
 
@@ -27,6 +27,50 @@ TEST(Bytes, WritesFixedWidthLittleEndian) {
                                          0x9a, 0x78, 0xef, 0xcd, 0xab,
                                          0x89, 0x67, 0x45, 0x23, 0x01};
   EXPECT_EQ(writer.bytes(), expected);
+}
+
+TEST(Bytes, WritesToExternalBuffer) {
+  std::vector<uint8_t> buffer;
+
+  thoom::ByteWriter writer(buffer);
+  writer.write_u16(0x3456);
+
+  EXPECT_EQ(buffer, std::vector<uint8_t>({0x56, 0x34}));
+  EXPECT_EQ(writer.bytes(), buffer);
+}
+
+TEST(Bytes, ExternalWriterAppendsAndClears) {
+  std::vector<uint8_t> buffer = {0xaa};
+
+  thoom::ByteWriter writer(buffer);
+  writer.write_u8(0xbb);
+
+  EXPECT_EQ(buffer, std::vector<uint8_t>({0xaa, 0xbb}));
+
+  writer.clear();
+  EXPECT_TRUE(buffer.empty());
+}
+
+TEST(Bytes, ReadsFromExternalBuffer) {
+  std::vector<uint8_t> buffer = {0x34, 0x12, 0x78, 0x56};
+
+  thoom::ByteReader reader(buffer);
+
+  EXPECT_EQ(reader.read_u16(), 0x1234);
+  EXPECT_EQ(reader.read_u16(), 0x5678);
+  EXPECT_TRUE(reader.ok());
+  EXPECT_EQ(reader.remaining(), 0u);
+}
+
+TEST(Bytes, ExternalWriterHandlesSelfAliasingBlob) {
+  std::vector<uint8_t> buffer = {0x44, 0x33, 0x22, 0x11};
+
+  thoom::ByteWriter writer(buffer);
+  writer.write_blob(buffer.data(), static_cast<uint32_t>(buffer.size()));
+
+  const std::vector<uint8_t> expected = {0x44, 0x33, 0x22, 0x11, 4,    0,
+                                         0,    0,    0x44, 0x33, 0x22, 0x11};
+  EXPECT_EQ(buffer, expected);
 }
 
 TEST(Bytes, WritesFloatBits) {

@@ -3,19 +3,49 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "object/object.h"
 #include "thoom/thoom.h"
 
 namespace thoom {
 
-typedef uint32_t NodeId;
-
 class Entity : public Object {
  public:
+  static constexpr thoom_nid kRootNid = 0;
+
   enum class Ownership {
     kFixed,
     kRoundRobin,
+  };
+
+  enum class AuthorityScope {
+    kAll,
+    kLocal,
+    kRemote,
+  };
+
+  struct NodeKey {
+    thoom_gid gid = THOOM_GID_INVALID;
+    thoom_nid nid = kRootNid;
+
+    bool operator==(const NodeKey& other) const {
+      return this->gid == other.gid && this->nid == other.nid;
+    }
+
+    bool operator<(const NodeKey& other) const {
+      if (this->gid != other.gid) {
+        return this->gid < other.gid;
+      }
+
+      return this->nid < other.nid;
+    }
+  };
+
+  struct Event {
+    NodeKey target;
+    uint32_t kind = 0;
+    std::vector<uint8_t> payload;
   };
 
   struct Context {
@@ -27,10 +57,14 @@ class Entity : public Object {
 
   class Node : public Object {
    public:
-    Node(Object& parent, std::optional<NodeId> id);
+    Node(Object& parent, std::optional<thoom_nid> explicit_nid);
+
+    virtual void receive_event(const Event&) {}
+
+    NodeKey key() const;
 
     Entity& entity;
-    const NodeId node_id;
+    const thoom_nid nid;
 
    private:
     static Entity& root_for(Object& parent);
@@ -38,29 +72,26 @@ class Entity : public Object {
 
   explicit Entity(const Context& context);
 
-  Object* find_node(NodeId id);
+  virtual void receive_event(const Event&) {}
+
+  NodeKey key() const;
+  Object* find_node(thoom_nid nid);
 
   const thoom_gid gid;
   thoom_pid owner_pid;
   const Ownership ownership;
 
  private:
-  NodeId issue_node_id();
-  void reserve_node_id(Node& node);
-  Object* find_descendant(Object& object, NodeId id);
+  thoom_nid issue_nid();
+  void reserve_nid(Node& node);
+  Object* find_descendant(Object& object, thoom_nid nid);
 
-  NodeId next_node_id = 1;
+  thoom_nid next_nid = kRootNid + 1;
 };
 
 struct EntityOptions {
   Entity::Ownership ownership = Entity::Ownership::kRoundRobin;
   thoom_pid owner_pid = THOOM_PID_INVALID;
-};
-
-struct EntityRequest {
-  std::string id;
-  std::string options;
-  EntityOptions policy;
 };
 
 struct EntityDef {
@@ -69,6 +100,12 @@ struct EntityDef {
                            const std::string& options);
   EntityOptions defaults;
   ObjectOrder order;
+};
+
+struct EntityRequest {
+  std::string id;
+  std::string options;
+  EntityOptions policy;
 };
 
 struct EntityRecord {

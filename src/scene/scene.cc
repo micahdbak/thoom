@@ -2,9 +2,11 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -16,6 +18,7 @@
 #include "colour.h"
 #include "hud/hud.h"
 #include "map/map.h"
+#include "object/area.h"
 #include "object/entity.h"
 #include "object/object.h"
 #include "renderer/renderer.h"
@@ -165,6 +168,15 @@ void Scene::replicate_entity(const EntityRecord& record) {
   this->request_creation(record);
 }
 
+void Scene::queue_event(Entity::Event event) {
+  if (this->state == Scene::kUnloading) {
+    thoom_log_warn("Scene: event dropped while the scene unloads");
+    return;
+  }
+
+  this->events.push_back(std::move(event));
+}
+
 Object* Scene::find_object(thoom_lid lid) {
   std::unordered_map<thoom_lid, Object*>::iterator it =
       this->objects_by_lid.find(lid);
@@ -185,6 +197,66 @@ Entity* Scene::find_entity(thoom_gid gid) {
   }
 
   return it->second;
+}
+
+Object* Scene::find_node(const Entity::NodeKey& key) {
+  Entity* entity = this->find_entity(key.gid);
+  if (entity == nullptr) {
+    return nullptr;
+  }
+
+  Object* node = entity->find_node(key.nid);
+  if (node == nullptr || node->deleted) {
+    return nullptr;
+  }
+
+  return node;
+}
+
+std::vector<Entity*> Scene::find_entities(Entity::AuthorityScope authority) {
+  const thoom_pid current_pid = PeerIdentity::instance->get_current();
+  std::vector<Entity*> entities;
+
+  for (std::vector<Object*>& objects : this->object_lists) {
+    for (Object* object : objects) {
+      Entity* entity = dynamic_cast<Entity*>(object);
+      if (entity == nullptr || entity->deleted ||
+          !Scene::authority_matches(entity->owner_pid, current_pid,
+                                    authority)) {
+        continue;
+      }
+
+      entities.push_back(entity);
+    }
+  }
+
+  std::sort(entities.begin(), entities.end(),
+            [](const Entity* left, const Entity* right) {
+              return left->gid < right->gid;
+            });
+
+  return entities;
+}
+
+std::vector<Area*> Scene::find_areas(const AreaQuery& query) {
+  const thoom_pid current_pid = PeerIdentity::instance->get_current();
+  std::vector<Area*> areas;
+
+  for (std::vector<Object*>& objects : this->object_lists) {
+    for (Object* object : objects) {
+      Entity* entity = dynamic_cast<Entity*>(object);
+      if (entity != nullptr) {
+        Scene::collect_areas(*entity, query, current_pid, areas);
+      }
+    }
+  }
+
+  std::sort(areas.begin(), areas.end(),
+            [](const Area* left, const Area* right) {
+              return left->key() < right->key();
+            });
+
+  return areas;
 }
 
 void Scene::save_objects() {
@@ -240,10 +312,35 @@ void Scene::tick() {
 
   Renderer::instance->sprites.clear();
 
+  this->apply_events(current_pid);
   this->step_local_trees(current_pid);
   this->create_requested_objects();
   this->render_trees();
   this->destroy_deleted_trees();
+}
+
+void Scene::apply_events(thoom_pid current_pid) {
+  std::deque<Entity::Event> events;
+  events.swap(this->events);
+
+  for (const Entity::Event& event : events) {
+    Entity* entity = this->find_entity(event.target.gid);
+    if (entity == nullptr || entity->owner_pid != current_pid) {
+      continue;
+    }
+
+    Object* target = entity->find_node(event.target.nid);
+    if (target == nullptr || target->deleted) {
+      continue;
+    }
+
+    Entity::Node* node = dynamic_cast<Entity::Node*>(target);
+    if (node != nullptr) {
+      node->receive_event(event);
+    } else {
+      entity->receive_event(event);
+    }
+  }
 }
 
 void Scene::step_local_trees(thoom_pid current_pid) {
@@ -299,6 +396,42 @@ void Scene::destroy_object(Object* object) {
   delete object;
 }
 
+bool Scene::authority_matches(thoom_pid owner_pid, thoom_pid current_pid,
+                              Entity::AuthorityScope authority) {
+  switch (authority) {
+    case Entity::AuthorityScope::kAll:
+      return true;
+    case Entity::AuthorityScope::kLocal:
+      return owner_pid == current_pid;
+    case Entity::AuthorityScope::kRemote:
+      return owner_pid != current_pid;
+  }
+
+  return false;
+}
+
+void Scene::collect_areas(Object& object, const AreaQuery& query,
+                          thoom_pid current_pid, std::vector<Area*>& areas) {
+  if (object.deleted) {
+    return;
+  }
+
+  Area* area = dynamic_cast<Area*>(&object);
+  if (area != nullptr && area->enabled &&
+      Scene::authority_matches(area->entity.owner_pid, current_pid,
+                               query.authority) &&
+      (query.groups == 0 || (area->groups & query.groups) != 0)) {
+    SDL_FRect bounds = area->bounds();
+    if (SDL_HasRectIntersectionFloat(&query.bounds, &bounds)) {
+      areas.push_back(area);
+    }
+  }
+
+  for (Object* child : object.get_children()) {
+    Scene::collect_areas(*child, query, current_pid, areas);
+  }
+}
+
 void Scene::load_map(const std::string& path, bool create_objects) {
   this->state = Scene::kLoading;
 
@@ -338,6 +471,8 @@ void Scene::unload() {
   this->state = Scene::kUnloading;
 
   while (!this->creation_requests.empty()) this->creation_requests.pop();
+
+  this->events.clear();
 
   // Normal objects belong to the map. Objects in the first and last lists
   // outlive it, so a map change does not remove session objects.
