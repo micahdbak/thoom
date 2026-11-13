@@ -117,6 +117,7 @@ class Scene {
   std::unordered_map<thoom_gid, Entity*> entities_by_gid;
   std::unordered_map<std::string, ObjectDef> object_factories;
   std::unordered_map<std::string, EntityDef> entity_factories;
+
   std::queue<CreationRequest> creation_requests;
   std::deque<Entity::Event> events;
 };

@@ -29,6 +29,7 @@ class Area : public Entity::Node {
   float origin_x = 0.0f;
   float origin_y = 0.0f;
   SDL_FRect offset;
+
   uint32_t groups;
   bool enabled = true;
 };

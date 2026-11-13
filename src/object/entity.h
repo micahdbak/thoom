@@ -25,13 +25,6 @@ class Entity : public Object {
     kRemote,
   };
 
-  struct Context {
-    thoom_pid creator_pid;
-    std::optional<thoom_gid> gid;
-    thoom_pid owner_pid;
-    Ownership ownership;
-  };
-
   struct NodeKey {
     thoom_gid gid = THOOM_GID_INVALID;
     thoom_nid nid = kRootNid;
@@ -55,12 +48,20 @@ class Entity : public Object {
     std::vector<uint8_t> payload;
   };
 
+  struct Context {
+    thoom_pid creator_pid;
+    std::optional<thoom_gid> gid;
+    thoom_pid owner_pid;
+    Ownership ownership;
+  };
+
   class Node : public Object {
    public:
     Node(Object& parent, std::optional<thoom_nid> explicit_nid);
 
-    NodeKey key() const;
     virtual void receive_event(const Event&) {}
+
+    NodeKey key() const;
 
     Entity& entity;
     const thoom_nid nid;
@@ -71,9 +72,10 @@ class Entity : public Object {
 
   explicit Entity(const Context& context);
 
+  virtual void receive_event(const Event&) {}
+
   NodeKey key() const;
   Object* find_node(thoom_nid nid);
-  virtual void receive_event(const Event&) {}
 
   const thoom_gid gid;
   thoom_pid owner_pid;
@@ -92,18 +94,18 @@ struct EntityOptions {
   thoom_pid owner_pid = THOOM_PID_INVALID;
 };
 
-struct EntityRequest {
-  std::string id;
-  std::string options;
-  EntityOptions policy;
-};
-
 struct EntityDef {
   const char* id;
   Entity* (*create_entity)(const Entity::Context& context,
                            const std::string& options);
   EntityOptions defaults;
   ObjectOrder order;
+};
+
+struct EntityRequest {
+  std::string id;
+  std::string options;
+  EntityOptions policy;
 };
 
 struct EntityRecord {

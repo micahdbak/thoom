@@ -16,11 +16,11 @@ enum ObjectOrder {
 class Object {
  public:
   explicit Object(Object* parent);
-  virtual ~Object();
 
   Object(const Object&) = delete;
   Object& operator=(const Object&) = delete;
 
+  virtual ~Object();
   virtual void step() = 0;
   virtual void render() {}
   virtual void save_data() {}

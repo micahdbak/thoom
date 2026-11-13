@@ -385,6 +385,17 @@ void Scene::destroy_deleted_trees() {
   }
 }
 
+void Scene::destroy_object(Object* object) {
+  this->objects_by_lid.erase(object->lid);
+
+  Entity* entity = dynamic_cast<Entity*>(object);
+  if (entity != nullptr) {
+    this->entities_by_gid.erase(entity->gid);
+  }
+
+  delete object;
+}
+
 bool Scene::authority_matches(thoom_pid owner_pid, thoom_pid current_pid,
                               Entity::AuthorityScope authority) {
   switch (authority) {
@@ -419,17 +430,6 @@ void Scene::collect_areas(Object& object, const AreaQuery& query,
   for (Object* child : object.get_children()) {
     Scene::collect_areas(*child, query, current_pid, areas);
   }
-}
-
-void Scene::destroy_object(Object* object) {
-  this->objects_by_lid.erase(object->lid);
-
-  Entity* entity = dynamic_cast<Entity*>(object);
-  if (entity != nullptr) {
-    this->entities_by_gid.erase(entity->gid);
-  }
-
-  delete object;
 }
 
 void Scene::load_map(const std::string& path, bool create_objects) {

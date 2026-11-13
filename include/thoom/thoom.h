@@ -47,7 +47,6 @@ bool thoom_init(const char* title, uint32_t screen_width,
                 const struct hud_def* def);
 
 bool thoom_room_init(bool host);
-
 void thoom_room_quit(void);
 
 void thoom_poll_events(bool* quit);

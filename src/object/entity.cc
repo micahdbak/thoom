@@ -9,20 +9,6 @@
 
 namespace thoom {
 
-Entity& Entity::Node::root_for(Object& parent) {
-  Entity* entity = dynamic_cast<Entity*>(&parent);
-  if (entity != nullptr) {
-    return *entity;
-  }
-
-  Node* node = dynamic_cast<Node*>(&parent);
-  if (node != nullptr) {
-    return node->entity;
-  }
-
-  thoom_log_fatal("Entity::Node: parent does not belong to an entity");
-}
-
 Entity::Node::Node(Object& parent, std::optional<thoom_nid> explicit_nid)
     : Object(&parent),
       entity(root_for(parent)),
@@ -35,6 +21,20 @@ Entity::Node::Node(Object& parent, std::optional<thoom_nid> explicit_nid)
 
 Entity::NodeKey Entity::Node::key() const {
   return {this->entity.gid, this->nid};
+}
+
+Entity& Entity::Node::root_for(Object& parent) {
+  Entity* entity = dynamic_cast<Entity*>(&parent);
+  if (entity != nullptr) {
+    return *entity;
+  }
+
+  Node* node = dynamic_cast<Node*>(&parent);
+  if (node != nullptr) {
+    return node->entity;
+  }
+
+  thoom_log_fatal("Entity::Node: parent does not belong to an entity");
 }
 
 Entity::Entity(const Context& context)
