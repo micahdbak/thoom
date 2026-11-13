@@ -1,16 +1,17 @@
 #include "switch/switch.h"
 
 #include <chrono>
+#include <cinttypes>
 #include <cstdint>
 #include <deque>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/log/log.h"
 #include "switch/bytes.h"
 #include "switch/frame.h"
 #include "switch/peer_identity.h"
+#include "thoom/log.h"
 #include "thoom/thoom.h"
 
 namespace thoom {
@@ -60,7 +61,7 @@ bool Switch::host(const Options& options) {
   this->role = kRoleHost;
 
   if (!this->open_room(&this->token) || this->token.empty()) {
-    LOG(ERROR) << "Switch: the room could not be opened";
+    thoom_log_error("Switch: the room could not be opened");
     PeerIdentity::instance->set_current(THOOM_PID_INVALID);
     this->state = kClosed;
     this->reason = kReasonTransport;
@@ -71,7 +72,7 @@ bool Switch::host(const Options& options) {
   this->state = kListening;
   PeerIdentity::instance->set_current(THOOM_PID_HOST);
   this->pid_owned = true;
-  LOG(INFO) << "Switch: hosting " << this->token;
+  thoom_log_info("Switch: hosting %s", this->token.c_str());
   return true;
 }
 
@@ -85,7 +86,8 @@ bool Switch::join(const Options& options, const char* code) {
   this->token = code;
 
   if (!this->enter_room(this->token)) {
-    LOG(ERROR) << "Switch: the room " << this->token << " could not be entered";
+    thoom_log_error("Switch: the room %s could not be entered",
+                    this->token.c_str());
     PeerIdentity::instance->set_current(THOOM_PID_INVALID);
     this->state = kClosed;
     this->reason = kReasonTransport;
@@ -95,7 +97,7 @@ bool Switch::join(const Options& options, const char* code) {
   this->room_open = true;
   this->state = kJoining;
   PeerIdentity::instance->set_current(THOOM_PID_INVALID);
-  LOG(INFO) << "Switch: joining " << this->token;
+  thoom_log_info("Switch: joining %s", this->token.c_str());
   return true;
 }
 
@@ -128,7 +130,7 @@ void Switch::close() {
 
     PeerIdentity::instance->set_current(THOOM_PID_INVALID);
     this->pid_owned = false;
-    LOG(INFO) << "Switch: closed: " << reason_name(this->reason);
+    thoom_log_info("Switch: closed: %s", reason_name(this->reason));
   }
 
   this->shutdown();
@@ -222,8 +224,8 @@ void Switch::on_open(PeerHandle handle) {
   }
 
   peer->deadline_ms = now_ms() + this->options.handshake_timeout_ms;
-  LOG(INFO) << "Switch: link " << handle << " opened as "
-            << (this->role == kRoleHost ? "host" : "guest");
+  thoom_log_info("Switch: link %" PRIu64 " opened as %s", handle,
+                 this->role == kRoleHost ? "host" : "guest");
 
   if (this->role == kRoleHost) {
     if (!this->can_accept()) {
@@ -278,8 +280,8 @@ void Switch::on_drop(PeerHandle handle, Reason reason) {
 
   this->remove_peer(peer);
 
-  LOG(INFO) << "Switch: link " << handle << " dropped: " << reason_name(reason)
-            << (ready ? " after ready" : " before ready");
+  thoom_log_info("Switch: link %" PRIu64 " dropped: %s%s", handle,
+                 reason_name(reason), ready ? " after ready" : " before ready");
 
   if (ready) {
     this->push_event(Event::kLeave, pid, reason);
@@ -311,9 +313,9 @@ void Switch::expire_peers() {
       continue;
     }
 
-    LOG(INFO) << "Switch: link " << peer->handle
-              << (peer->state == kPeerHandshaking ? " handshake expired"
-                                                  : " reject flush expired");
+    thoom_log_info("Switch: link %" PRIu64 "%s", peer->handle,
+                   peer->state == kPeerHandshaking ? " handshake expired"
+                                                   : " reject flush expired");
 
     if (peer->state == kPeerHandshaking && this->role == kRoleGuest) {
       this->finish(kReasonTimeout);
@@ -346,7 +348,7 @@ void Switch::finish(Reason reason) {
   this->reason = reason;
   PeerIdentity::instance->set_current(THOOM_PID_INVALID);
   this->pid_owned = false;
-  LOG(INFO) << "Switch: session ended: " << reason_name(reason);
+  thoom_log_info("Switch: session ended: %s", reason_name(reason));
 }
 
 void Switch::refuse(Peer* peer, Reason reason) {
@@ -359,8 +361,8 @@ void Switch::refuse(Peer* peer, Reason reason) {
   this->send_frame(peer, kFrameReject, writer.bytes().data(),
                    static_cast<uint32_t>(writer.bytes().size()), true);
 
-  LOG(INFO) << "Switch: refused link " << peer->handle << ": "
-            << reason_name(reason);
+  thoom_log_info("Switch: refused link %" PRIu64 ": %s", peer->handle,
+                 reason_name(reason));
 
   peer->state = kPeerRefused;
   peer->deadline_ms = now_ms() + this->options.reject_flush_ms;
@@ -427,7 +429,7 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
 
   const thoom_pid pid = PeerIdentity::instance->issue();
   if (pid == THOOM_PID_INVALID) {
-    LOG(ERROR) << "Switch: no pid remains to admit a guest";
+    thoom_log_error("Switch: no pid remains to admit a guest");
     this->refuse(peer, kReasonFull);
     return;
   }
@@ -442,7 +444,7 @@ void Switch::handle_hello(Peer* peer, const Frame& frame) {
 
   peer->pid = pid;
   peer->state = kPeerReady;
-  LOG(INFO) << "Switch: admitted guest " << pid;
+  thoom_log_info("Switch: admitted guest %" PRIu32, pid);
   this->push_event(Event::kJoin, pid, kReasonNone);
 }
 
@@ -467,7 +469,7 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
   }
 
   if (pid == THOOM_PID_HOST || pid == THOOM_PID_INVALID) {
-    LOG(WARNING) << "Switch: welcome carried an unusable pid " << pid;
+    thoom_log_warn("Switch: welcome carried an unusable pid %" PRIu32, pid);
     this->finish(kReasonProtocol);
     return;
   }
@@ -477,7 +479,7 @@ void Switch::handle_welcome(Peer* peer, const Frame& frame) {
   peer->pid = THOOM_PID_HOST;
   peer->state = kPeerReady;
   this->state = kJoined;
-  LOG(INFO) << "Switch: joined as pid " << pid;
+  thoom_log_info("Switch: joined as pid %" PRIu32, pid);
   this->push_event(Event::kJoin, THOOM_PID_HOST, kReasonNone);
 }
 
@@ -499,7 +501,7 @@ void Switch::handle_reject(Peer* peer, const Frame& frame) {
     reason = kReasonProtocol;
   }
 
-  LOG(INFO) << "Switch: join rejected: " << reason_name(reason);
+  thoom_log_info("Switch: join rejected: %s", reason_name(reason));
   this->finish(reason);
 }
 

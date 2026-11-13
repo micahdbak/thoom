@@ -9,12 +9,12 @@
 #include <string>
 #include <vector>
 
-#include "absl/log/log.h"
 #include "colour.h"
 #include "map/map_collider.h"
 #include "map/map_layer.h"
 #include "map/tilesheet.h"
 #include "object/object.h"
+#include "thoom/log.h"
 #include "thoom/macros.h"
 
 namespace thoom {
@@ -43,7 +43,7 @@ Map::Map(const char* map_path) {
   int i;
 
   if (map_path == NULL) {
-    LOG(FATAL) << "null map path";
+    thoom_log_fatal("null map path");
   }
 
   map_txt_path = std::string(map_path) + ".txt";
@@ -196,7 +196,7 @@ corrupted:
     fclose(bin_file);
   }
 
-  LOG(FATAL) << "'" << map_path << "' corrupted";
+  thoom_log_fatal("'%s' corrupted", map_path);
 }
 
 Map::Map(int tile_width, int tile_height, int cols, int rows) {
@@ -245,7 +245,7 @@ void Map::write(const char* map_path) const {
 
   FILE* txt_file = fopen(map_txt_path.c_str(), "w");
   if (txt_file == nullptr) {
-    LOG(FATAL) << "'" << map_path << "' corrupted";
+    thoom_log_fatal("'%s' corrupted", map_path);
   }
 
   fprintf(txt_file, "%s\n%s\n", this->title.c_str(), this->description.c_str());
@@ -271,7 +271,7 @@ void Map::write(const char* map_path) const {
   fclose(txt_file);
   FILE* bin_file = fopen(map_bin_path.c_str(), "wb");
   if (bin_file == nullptr) {
-    LOG(FATAL) << "'" << map_path << "' corrupted";
+    thoom_log_fatal("'%s' corrupted", map_path);
   }
   uint8_t buffer[1024];
 

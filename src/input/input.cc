@@ -2,14 +2,14 @@
 
 #include <SDL3/SDL.h>
 
-#include "absl/log/log.h"
 #include "input/controller.h"
+#include "thoom/log.h"
 
 namespace thoom {
 
 bool Input::init() {
   if (Input::instance != nullptr) {
-    LOG(ERROR) << "Input::init error: input already initialized";
+    thoom_log_error("Input::init error: input already initialized");
     return false;
   }
 

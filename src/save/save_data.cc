@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "absl/log/log.h"
 #include "scene/scene.h"
+#include "thoom/log.h"
 
 namespace thoom {
 
@@ -27,7 +27,7 @@ std::vector<std::string> SaveData::file_summaries() {
   std::vector<std::string> summaries;
 
   if (save_root == nullptr) {
-    LOG(ERROR) << "SaveData::file_summaries error: " << SDL_GetError();
+    thoom_log_error("SaveData::file_summaries error: %s", SDL_GetError());
     return summaries;
   }
 
@@ -43,8 +43,8 @@ std::vector<std::string> SaveData::file_summaries() {
     // read first line of file
     char line[1024];
     if (fgets(line, sizeof(line), save_file) == NULL) {
-      LOG(WARNING) << "SaveData::file_summaries: '" << save_file_name
-                   << "' has no summary line";
+      thoom_log_warn("SaveData::file_summaries: '%s' has no summary line",
+                     save_file_name);
       fclose(save_file);
 
       // Keep the slot in the list so the numbers after it do not shift.
@@ -76,14 +76,14 @@ static unsigned long _djb2_hash(unsigned long starting_hash, const char* str) {
 
 void SaveData::write_file(int file_i) {
   if (file_i < 0) {
-    LOG(FATAL) << "bad save";
+    thoom_log_fatal("bad save");
   }
 
   char save_file_name[1024];
   char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
 
   if (save_root == nullptr) {
-    LOG(ERROR) << "SaveData::write_file error: " << SDL_GetError();
+    thoom_log_error("SaveData::write_file error: %s", SDL_GetError());
     return;
   }
 
@@ -93,7 +93,7 @@ void SaveData::write_file(int file_i) {
   SDL_free(save_root);
   FILE* save_file = fopen(save_file_name, "w");
   if (save_file == NULL) {
-    LOG(FATAL) << "bad save";
+    thoom_log_fatal("bad save");
   }
 
   std::string line;
@@ -130,8 +130,8 @@ void SaveData::write_file(int file_i) {
   const bool write_failed = ferror(save_file) != 0;
 
   if (fclose(save_file) != 0 || write_failed) {
-    LOG(ERROR) << "SaveData::write_file error: could not write '"
-               << save_file_name << "'";
+    thoom_log_error("SaveData::write_file error: could not write '%s'",
+                    save_file_name);
   }
 }
 
@@ -139,14 +139,14 @@ void SaveData::write_file(int file_i) {
 
 int SaveData::load_file(int file_i) {
   if (file_i < 0) {
-    LOG(FATAL) << "bad save";
+    thoom_log_fatal("bad save");
   }
 
   char save_file_name[1024];
   char* save_root = SDL_GetPrefPath(PREF_ORG, PREF_APP);
 
   if (save_root == nullptr) {
-    LOG(ERROR) << "SaveData::load_file error: " << SDL_GetError();
+    thoom_log_error("SaveData::load_file error: %s", SDL_GetError());
     return LOAD_TAMPER;
   }
 
@@ -164,8 +164,8 @@ int SaveData::load_file(int file_i) {
   char line[MAX_LINE_LENGTH];
 
   if (fgets(line, sizeof(line), save_file) == NULL) {
-    LOG(WARNING) << "SaveData::load_file: '" << save_file_name
-                 << "' has no summary line";
+    thoom_log_warn("SaveData::load_file: '%s' has no summary line",
+                   save_file_name);
     fclose(save_file);
     return LOAD_TAMPER;
   }
@@ -200,7 +200,7 @@ int SaveData::load_file(int file_i) {
       unsigned long hash_in_file;
 
       if (1 != sscanf(line, "%lu\n", &hash_in_file)) {
-        LOG(FATAL) << "bad save hash";
+        thoom_log_fatal("bad save hash");
       }
 
       fclose(save_file);

@@ -1,13 +1,15 @@
 #include "switch/peer_identity.h"
 
-#include "absl/log/log.h"
+#include <cinttypes>
+
+#include "thoom/log.h"
 #include "thoom/thoom.h"
 
 namespace thoom {
 
 bool PeerIdentity::init() {
   if (PeerIdentity::instance != nullptr) {
-    LOG(ERROR) << "PeerIdentity::init error: identity already initialized";
+    thoom_log_error("PeerIdentity::init error: identity already initialized");
     return false;
   }
 
@@ -46,11 +48,11 @@ void PeerIdentity::set_current(thoom_pid new_pid) {
   }
 
   if (new_pid == THOOM_PID_INVALID) {
-    LOG(INFO) << "PeerIdentity: current pid cleared";
+    thoom_log_info("PeerIdentity: current pid cleared");
     return;
   }
 
-  LOG(INFO) << "PeerIdentity: current pid set to " << new_pid;
+  thoom_log_info("PeerIdentity: current pid set to %" PRIu32, new_pid);
 }
 
 };  // namespace thoom

@@ -7,11 +7,11 @@
 #include <cstring>
 #include <vector>
 
-#include "absl/log/log.h"
 #include "colour.h"
 #include "map/tilesheet.h"
 #include "renderer/renderer.h"
 #include "texture/texture.h"
+#include "thoom/log.h"
 
 namespace thoom {
 
@@ -33,7 +33,7 @@ MapLayer::MapLayer(int cols, int rows, int tile_width, int tile_height,
       SDL_SCALEMODE_LINEAR);
 
   if (this->texture == nullptr) {
-    LOG(FATAL) << "SDL_CreateTexture error: " << SDL_GetError();
+    thoom_log_fatal("SDL_CreateTexture error: %s", SDL_GetError());
   }
 
   Renderer::instance->clear(this->texture, clear_colour);

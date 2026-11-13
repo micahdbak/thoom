@@ -3,6 +3,7 @@
 #include <rtc/rtc.h>
 
 #include <chrono>
+#include <cinttypes>
 #include <cstdint>
 #include <cstring>
 #include <deque>
@@ -11,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "absl/log/log.h"
 #include "switch/switch.h"
+#include "thoom/log.h"
 #include "webrtc/webrtc_signaller.h"
 
 #define CONNECT_PING_MS 500
@@ -87,7 +88,7 @@ bool WebRtcSwitch::open_room(std::string* token) {
 
 bool WebRtcSwitch::enter_room(const std::string& token) {
   if (!WebRtcSignaller::valid_code(token)) {
-    LOG(ERROR) << "WebRtcSwitch::enter_room: invalid connection code";
+    thoom_log_error("WebRtcSwitch::enter_room: invalid connection code");
     return false;
   }
 
@@ -117,9 +118,9 @@ bool WebRtcSwitch::send_raw(PeerHandle peer, const uint8_t* data, uint32_t size,
 
     if (link->max_message_size > 0 &&
         size > static_cast<uint32_t>(link->max_message_size)) {
-      LOG(ERROR) << "WebRtcSwitch::send_raw: " << size
-                 << " bytes exceeds the peer limit of "
-                 << link->max_message_size;
+      thoom_log_error("WebRtcSwitch::send_raw: %" PRIu32
+                      " bytes exceeds the peer limit of %d",
+                      size, link->max_message_size);
       return false;
     }
   } else if (link == nullptr || !link->unreliable_open) {
@@ -156,12 +157,12 @@ void WebRtcSwitch::close_room() {
 
 bool WebRtcSwitch::begin(const std::string& code) {
   if (this->room.state != Room::kIdle) {
-    LOG(WARNING) << "WebRtcSwitch::begin: the room is not idle";
+    thoom_log_warn("WebRtcSwitch::begin: the room is not idle");
     return false;
   }
 
   if (!this->room.signaller.connect(code)) {
-    LOG(ERROR) << "WebRtcSwitch::begin: signalling connect failed";
+    thoom_log_error("WebRtcSwitch::begin: signalling connect failed");
     this->room.state = Room::kFailed;
     return false;
   }
@@ -187,7 +188,7 @@ void WebRtcSwitch::poll_room() {
   if (state == WebRtcSignaller::kNotConnected) {
     // The signalling server is the front door. Losing it stops new guests
     // from arriving, but the links that already exist keep running.
-    LOG(ERROR) << "WebRtcSwitch: the signalling server is gone";
+    thoom_log_error("WebRtcSwitch: the signalling server is gone");
     this->room.state = Room::kFailed;
     return;
   }
@@ -206,7 +207,7 @@ void WebRtcSwitch::poll_room() {
   }
 
   if (!this->signal_outbox()) {
-    LOG(ERROR) << "WebRtcSwitch: a signal could not be sent";
+    thoom_log_error("WebRtcSwitch: a signal could not be sent");
   }
 }
 
@@ -248,8 +249,8 @@ void WebRtcSwitch::handle_event(const WebRtcSignaller::Event& event) {
   if (link == nullptr) {
     link = this->create_link(event.peer);
     if (link == nullptr) {
-      LOG(WARNING) << "WebRtcSwitch: no link for signalling peer "
-                   << event.peer;
+      thoom_log_warn("WebRtcSwitch: no link for signalling peer %d",
+                     event.peer);
       return;
     }
 
@@ -265,16 +266,20 @@ void WebRtcSwitch::handle_event(const WebRtcSignaller::Event& event) {
       const int result = rtcSetRemoteDescription(link->pc, event.first.c_str(),
                                                  event.second.c_str());
       if (result < 0) {
-        LOG(ERROR) << "WebRtcSwitch: remote description rejected with code "
-                   << result;
+        thoom_log_error(
+            "WebRtcSwitch: remote description rejected with "
+            "code %d",
+            result);
       }
     } break;
     case WebRtcSignaller::Event::kCandidate: {
       const int result = rtcAddRemoteCandidate(link->pc, event.first.c_str(),
                                                event.second.c_str());
       if (result < 0) {
-        LOG(WARNING) << "WebRtcSwitch: remote candidate rejected with code "
-                     << result;
+        thoom_log_warn(
+            "WebRtcSwitch: remote candidate rejected with code "
+            "%d",
+            result);
       }
     } break;
     case WebRtcSignaller::Event::kPing:
@@ -330,8 +335,10 @@ WebRtcSwitch::Link* WebRtcSwitch::create_link(int peer) {
 
   const int pc = rtcCreatePeerConnection(&config);
   if (pc < 0) {
-    LOG(ERROR) << "WebRtcSwitch: rtcCreatePeerConnection failed with code "
-               << pc;
+    thoom_log_error(
+        "WebRtcSwitch: rtcCreatePeerConnection failed with "
+        "code %d",
+        pc);
     return nullptr;
   }
 
@@ -360,8 +367,10 @@ bool WebRtcSwitch::create_channels(Link* link) {
   const int reliable =
       rtcCreateDataChannelEx(link->pc, RELIABLE_LABEL, &reliable_init);
   if (reliable < 0) {
-    LOG(ERROR) << "WebRtcSwitch: reliable channel creation failed with code "
-               << reliable;
+    thoom_log_error(
+        "WebRtcSwitch: reliable channel creation failed with "
+        "code %d",
+        reliable);
     return false;
   }
 
@@ -372,8 +381,10 @@ bool WebRtcSwitch::create_channels(Link* link) {
   const int unreliable =
       rtcCreateDataChannelEx(link->pc, UNRELIABLE_LABEL, &unreliable_init);
   if (unreliable < 0) {
-    LOG(ERROR) << "WebRtcSwitch: unreliable channel creation failed with code "
-               << unreliable;
+    thoom_log_error(
+        "WebRtcSwitch: unreliable channel creation failed with "
+        "code %d",
+        unreliable);
     return false;
   }
 
@@ -456,8 +467,7 @@ void WebRtcSwitch::poll_link(Link* link) {
   }
 
   if (lost && link->peer >= 0) {
-    LOG(WARNING) << "WebRtcSwitch: the link to peer " << link->peer
-                 << " was lost";
+    thoom_log_warn("WebRtcSwitch: the link to peer %d was lost", link->peer);
     this->drop_link(link);
   }
 }
@@ -551,7 +561,7 @@ void WebRtcSwitch::flush_pending(Link* link) {
 
     if (!this->write(link, pending.bytes.data(),
                      static_cast<uint32_t>(pending.bytes.size()), true)) {
-      LOG(ERROR) << "WebRtcSwitch: a buffered frame could not be sent";
+      thoom_log_error("WebRtcSwitch: a buffered frame could not be sent");
     }
   }
 
@@ -584,7 +594,7 @@ bool WebRtcSwitch::write(Link* link, const uint8_t* data, uint32_t size,
   const int result = rtcSendMessage(dc, reinterpret_cast<const char*>(data),
                                     static_cast<int>(size));
   if (result < 0) {
-    LOG(WARNING) << "WebRtcSwitch: send failed with code " << result;
+    thoom_log_warn("WebRtcSwitch: send failed with code %d", result);
     return false;
   }
 
@@ -646,7 +656,7 @@ void WebRtcSwitch::on_datachannel(int, int dc, void* user_ptr) {
 
   char label[CHANNEL_LABEL_SIZE] = {};
   if (rtcGetDataChannelLabel(dc, label, sizeof(label)) < 0) {
-    LOG(WARNING) << "WebRtcSwitch: a data channel has no readable label";
+    thoom_log_warn("WebRtcSwitch: a data channel has no readable label");
     return;
   }
 
@@ -658,7 +668,7 @@ void WebRtcSwitch::on_datachannel(int, int dc, void* user_ptr) {
              link->unreliable_dc.load() < 0) {
     link->unreliable_dc = dc;
   } else {
-    LOG(WARNING) << "WebRtcSwitch: ignored data channel " << label;
+    thoom_log_warn("WebRtcSwitch: ignored data channel %s", label);
     return;
   }
 
@@ -676,7 +686,7 @@ void WebRtcSwitch::on_channel_closed(int dc, void* user_ptr) {
 }
 
 void WebRtcSwitch::on_channel_error(int dc, const char* error, void* user_ptr) {
-  LOG(ERROR) << "WebRtcSwitch::on_channel_error: " << error;
+  thoom_log_error("WebRtcSwitch::on_channel_error: %s", error);
   WebRtcSwitch::push_event(static_cast<Link*>(user_ptr), Link::EventKind::kLost,
                            dc);
 }
@@ -684,8 +694,8 @@ void WebRtcSwitch::on_channel_error(int dc, const char* error, void* user_ptr) {
 void WebRtcSwitch::on_channel_message(int dc, const char* message, int size,
                                       void* user_ptr) {
   if (size <= 0) {
-    LOG(WARNING) << "WebRtcSwitch: dropped a message that is not a binary "
-                 << "payload";
+    thoom_log_warn(
+        "WebRtcSwitch: dropped a message that is not a binary payload");
     return;
   }
 
